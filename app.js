@@ -6,8 +6,8 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const ZZ = [0,1,8,16,9,2,3,10,17,24,32,25,18,11,4,5,12,19,26,33,40,48,41,34,27,20,13,6,7,14,21,28,35,42,49,56,57,50,43,36,29,22,15,23,30,37,44,51,58,59,52,45,38,31,39,46,53,60,61,54,47,55,62,63];
 const EDITORS = /photoshop|gimp|lightroom|paint\.net|pixelmator|affinity|snapseed|picsart|canva|corel|paintshop|capture one|darktable|rawtherapee|luminar|photoscape|fotor|facetune|vsco|adobe|acdsee|irfanview|imagemagick|photoworks|pixlr|sumopaint/i;
 
-let samples = [];          // repositori aktif
-let staged = [];           // hasil penyaringan terakhir
+let samples = [];          // active repository
+let staged = [];           // latest ingestion screening results
 let lastVerify = null;
 
 /* ---------------- IndexedDB ---------------- */
@@ -113,8 +113,8 @@ function readExif(buf) {
     r.xmpTool = t.xmp && t.xmp.CreatorTool ? String(t.xmp.CreatorTool.value || t.xmp.CreatorTool.description || '') : '';
     r.params = {};
     [['ExposureTime', 'Exposure'], ['FNumber', 'F-Number'], ['ISOSpeedRatings', 'ISO'], ['FocalLength', 'Focal Length'],
-     ['FocalLengthIn35mmFilm', 'Focal 35mm'], ['LensModel', 'Lens'], ['DateTimeOriginal', 'Tanggal Ambil'], ['Flash', 'Flash'],
-     ['Orientation', 'Orientasi'], ['ColorSpace', 'Color Space'], ['PixelXDimension', 'EXIF Width'], ['PixelYDimension', 'EXIF Height']]
+     ['FocalLengthIn35mmFilm', 'Focal 35mm'], ['LensModel', 'Lens'], ['DateTimeOriginal', 'Date/Time Original'], ['Flash', 'Flash'],
+     ['Orientation', 'Orientation'], ['ColorSpace', 'Color Space'], ['PixelXDimension', 'EXIF Width'], ['PixelYDimension', 'EXIF Height']]
       .forEach(([k, label]) => { const v = d(k); if (v !== undefined && v !== '') r.params[label] = String(v); });
     const th = t.Thumbnail || t.thumbnail;
     if (th) {
@@ -141,16 +141,16 @@ function normModel(model, make) {
 }
 const titleMake = m => m.charAt(0) + m.slice(1).toLowerCase();
 
-/* ---------------- Pemetaan Orientasi EXIF / TIFF ---------------- */
+/* ---------------- EXIF / TIFF Orientation Mapping ---------------- */
 const ORIENTATION_MAP = {
   1: { num: 1, classic: 'Top-Left', exifTool: 'Horizontal (normal)', category: 'Landscape', label: 'Landscape', deg: 0 },
   2: { num: 2, classic: 'Top-Right', exifTool: 'Mirror horizontal', category: 'Landscape', label: 'Landscape', deg: 0, flipH: true },
   3: { num: 3, classic: 'Bottom-Right', exifTool: 'Rotate 180', category: 'Landscape', label: 'Landscape', deg: 180 },
   4: { num: 4, classic: 'Bottom-Left', exifTool: 'Mirror vertical', category: 'Landscape', label: 'Landscape', deg: 0, flipV: true },
   5: { num: 5, classic: 'Left-Top', exifTool: 'Mirror horizontal and rotate 270 CW', category: 'Portrait', label: 'Portrait', deg: 270, flipH: true },
-  6: { num: 6, classic: 'Right-Top', exifTool: 'Rotate 90 CW', category: 'Portrait', label: 'Portrait (Kamera diputar ke kanan)', deg: 90 },
+  6: { num: 6, classic: 'Right-Top', exifTool: 'Rotate 90 CW', category: 'Portrait', label: 'Portrait', deg: 90 },
   7: { num: 7, classic: 'Right-Bottom', exifTool: 'Mirror horizontal and rotate 90 CW', category: 'Portrait', label: 'Portrait', deg: 90, flipH: true },
-  8: { num: 8, classic: 'Left-Bottom', exifTool: 'Rotate 270 CW', category: 'Portrait', label: 'Portrait (Kamera diputar ke kiri)', deg: 270 }
+  8: { num: 8, classic: 'Left-Bottom', exifTool: 'Rotate 270 CW', category: 'Portrait', label: 'Portrait', deg: 270 }
 };
 
 function parseOrientation(val, w = 0, h = 0) {
@@ -243,9 +243,9 @@ function placeholder(fmt) {
 }
 function thumbOf(s) {
   if (!s) return placeholder('JPEG');
-  // 1. Data URI base64 thumbnail yang valid
+  // 1. Valid data URI base64 thumbnail
   if (s.thumb && typeof s.thumb === 'string' && s.thumb.length > 50) return s.thumb;
-  // 2. Cari di DEFAULT_SIGNATURES jika s.thumb lokal masih kosong
+  // 2. Lookup in DEFAULT_SIGNATURES if local s.thumb is empty
   if (window.DEFAULT_SIGNATURES && Array.isArray(window.DEFAULT_SIGNATURES.samples)) {
     const found = window.DEFAULT_SIGNATURES.samples.find(x => x.id === s.id || x.file === s.file);
     if (found && found.thumb && found.thumb.length > 50) {
@@ -254,11 +254,11 @@ function thumbOf(s) {
       return s.thumb;
     }
   }
-  // 3. Fallback langsung ke file gambar lokal di images/
+  // 3. Direct fallback to local image files under images/
   if (s.file && (s.file.startsWith('images/') || s.file.startsWith('./images/') || /\.(jpe?g|png|webp)$/i.test(s.file))) {
     return s.file;
   }
-  // 4. Placeholder
+  // 4. Format placeholder
   return placeholder(s.format || 'JPEG');
 }
 
@@ -269,15 +269,15 @@ function imgTag(s, cls, extra = '') {
   return `<img class="${cls}" ${extra} src="${primary}" onerror="if(this.src!=='${altFallback}'){this.src='${altFallback}'}else{this.onerror=null;this.src='${placeholder(s && s.format)}'}">`;
 }
 
-/* ---------------- Analisis berkas ---------------- */
+/* ---------------- File Analysis ---------------- */
 async function analyze(name, buf, size) {
   const j = parseJpeg(buf);
   const fmt = detectFormat(new Uint8Array(buf, 0, Math.min(16, buf.byteLength)));
   const item = { name, size, valid: j.valid, format: fmt };
-  if (!j.valid) { item.status = 'rejected'; item.rec = { format: fmt, file: name, device: '', software: '', thumb: await makePreview(buf, 'image/' + fmt.toLowerCase()) }; item.reason = fmt === 'UNKNOWN' ? 'Format tidak dikenali / bukan gambar (header FF D8 FF tidak ditemukan)' : `Format ${fmt}, bukan JPEG (tidak punya tabel DQT JPEG)`; return item; }
+  if (!j.valid) { item.status = 'rejected'; item.rec = { format: fmt, file: name, device: '', software: '', thumb: await makePreview(buf, 'image/' + fmt.toLowerCase()) }; item.reason = fmt === 'UNKNOWN' ? 'Unrecognized format / not an image (header FF D8 FF not found)' : `Format ${fmt}, not JPEG (no JPEG DQT tables)`; return item; }
   const ex = readExif(buf);
   const rawW = j.sof ? j.sof.width : 0, rawH = j.sof ? j.sof.height : 0;
-  const ori = (ex.params && (ex.params['Orientasi'] || ex.params['Orientation'])) || '';
+  const ori = (ex.params && (ex.params['Orientation'] || ex.params['Orientasi'])) || '';
   const oInfo = parseOrientation(ori, rawW, rawH);
   if (!ex.thumb) {
     ex.thumb = await makePreview(buf);
@@ -303,9 +303,9 @@ async function analyze(name, buf, size) {
     markers: j.markers.map(m => m.toString(16).toUpperCase()), exif: ex.params || {}, thumb: ex.thumb, thumbSrc: ex.thumbSrc || ''
   };
   item.edited = EDITORS.test(tool);
-  if (!j.dqtKey) { item.status = 'rejected'; item.reason = 'Tidak ada tabel DQT'; }
-  else if (item.edited) { item.status = 'rejected'; item.reason = 'Diedit software pihak ketiga: ' + tool; }
-  else if (!item.rec.device) { item.status = 'rejected'; item.reason = 'EXIF Make/Model tidak tersedia'; }
+  if (!j.dqtKey) { item.status = 'rejected'; item.reason = 'No DQT tables found'; }
+  else if (item.edited) { item.status = 'rejected'; item.reason = 'Edited with third-party software: ' + tool; }
+  else if (!item.rec.device) { item.status = 'rejected'; item.reason = 'EXIF Make/Model unavailable'; }
   else item.status = 'accepted';
   return item;
 }
@@ -321,7 +321,7 @@ async function collect(files) {
       try {
         const z = await JSZip.loadAsync(f);
         z.forEach((path, entry) => { if (!entry.dir && isJpegName(path)) jobs.push({ name: f.name + ':' + path, get: () => entry.async('arraybuffer') }); });
-      } catch (e) { toast('ZIP gagal dibaca: ' + f.name); }
+      } catch (e) { toast('Failed to read ZIP: ' + f.name); }
     } else if (IMG_EXT.test(f.name) || (f.type || '').startsWith('image/')) jobs.push({ name: nm, get: () => f.arrayBuffer() });
   }
   return jobs;
@@ -329,16 +329,16 @@ async function collect(files) {
 
 async function ingest(files) {
   const jobs = await collect([...files]);
-  if (!jobs.length) { toast('Tidak ada berkas JPEG ditemukan'); return; }
+  if (!jobs.length) { toast('No JPEG files found'); return; }
   staged = [];
   for (let i = 0; i < jobs.length; i++) {
     try {
       const buf = await jobs[i].get();
       staged.push(await analyze(jobs[i].name, buf, buf.byteLength));
-    } catch (e) { staged.push({ name: jobs[i].name, status: 'rejected', reason: 'Gagal dibaca: ' + e.message }); }
+    } catch (e) { staged.push({ name: jobs[i].name, status: 'rejected', reason: 'Failed to read: ' + e.message }); }
     if (i % 5 === 0 || i === jobs.length - 1) {
       $('#bar').style.width = ((i + 1) / jobs.length * 100) + '%';
-      $('#progText').textContent = `Memproses ${i + 1} / ${jobs.length}`;
+      $('#progText').textContent = `Processing ${i + 1} / ${jobs.length}`;
       await new Promise(r => setTimeout(r));
     }
   }
@@ -350,7 +350,7 @@ function renderIngest() {
   const inval = staged.filter(s => s.valid === false).length;
   const ed = staged.filter(s => s.edited).length;
   const nometa = staged.filter(s => s.valid && !s.edited && s.status === 'rejected').length;
-  $('#ingestTiles').innerHTML = [['Total', staged.length], ['Lolos', acc], ['Bukan JPEG valid', inval], ['Diedit software', ed], ['Tanpa Make/Model/DQT', nometa]]
+  $('#ingestTiles').innerHTML = [['Total', staged.length], ['Accepted', acc], ['Invalid JPEG', inval], ['Software Edited', ed], ['Missing Metadata/DQT', nometa]]
     .map(([l, v]) => `<div class="tile"><b>${v}</b><span>${l}</span></div>`).join('');
   $('#btnAddAccepted').disabled = !acc;
   const f = $('#filterStatus').value;
@@ -360,14 +360,14 @@ function renderIngest() {
     <td class="small">${esc(s.name)}</td>
     <td>${esc(s.rec ? s.rec.device : '')}</td>
     <td class="small">${esc(s.rec ? s.rec.software : '')}</td>
-    <td>${s.status === 'accepted' ? '<span class="badge ok">Lolos</span>' : `<span class="badge bad">Ditolak</span> <span class="small muted">${esc(s.reason)}</span>`}</td></tr>`).join('')
-    : '<tr><td colspan="5" class="muted">Tidak ada data.</td></tr>';
+    <td>${s.status === 'accepted' ? '<span class="badge ok">Accepted</span>' : `<span class="badge bad">Rejected</span> <span class="small muted">${esc(s.reason)}</span>`}</td></tr>`).join('')
+    : '<tr><td colspan="5" class="muted">No data available.</td></tr>';
 }
 
-/* ---------------- Katalog & klasifikasi ---------------- */
-/* Jarak antar-signature: rata-rata selisih absolut seluruh elemen tabel DQT (satuan step kuantisasi). */
-const NEAR = 1.0;   // <= NEAR : dianggap varian signature yang sama (mis. Samsung dengan tabel adaptif)
-const CLOSE = 2.0;  // <= CLOSE : mirip tapi tidak identik
+/* ---------------- Catalog & Classification ---------------- */
+/* Inter-signature distance: mean absolute difference across all elements in DQT tables (quantization step units). */
+const NEAR = 1.0;   // <= NEAR : treated as same signature variant (e.g. Samsung adaptive quantization)
+const CLOSE = 2.0;  // <= CLOSE : similar but not identical
 function dqtDist(a, b) {
   let t = 0, n = 0;
   for (const id of Object.keys(a)) {
@@ -378,7 +378,7 @@ function dqtDist(a, b) {
 }
 const simPct = d => d === Infinity ? 0 : 100 / (1 + d);
 
-/* Estimasi faktor kualitas IJG dari tabel luminance (Annex K) */
+/* Estimate IJG quality factor from luminance table (Annex K) */
 const STD_LUM = [16,11,10,16,24,40,51,61,12,12,14,19,26,58,60,55,14,13,16,24,40,57,69,56,14,17,22,29,51,87,80,62,18,22,37,56,68,109,103,77,24,35,55,64,81,104,113,92,49,64,78,87,103,121,120,101,72,92,95,98,112,100,103,99];
 function estimateQuality(dqt) {
   const t = dqt && dqt[0]; if (!t) return null;
@@ -390,9 +390,9 @@ function estimateQuality(dqt) {
   }
   return best;
 }
-const qualityText = dqt => { const e = estimateQuality(dqt); return e ? `≈ Q${e.q} (galat ${e.err.toFixed(2)}${e.err > 1 ? ', tabel non-standar' : ''})` : '-'; };
+const qualityText = dqt => { const e = estimateQuality(dqt); return e ? `≈ Q${e.q} (error ${e.err.toFixed(2)}${e.err > 1 ? ', non-standard table' : ''})` : '-'; };
 
-/* Signature dikelompokkan menjadi keluarga: varian dengan jarak <= NEAR digabung (single-linkage). */
+/* Signatures are grouped into families: variants with distance <= NEAR are merged (single-linkage). */
 function groupSignatures() {
   const exact = new Map();
   samples.forEach(s => {
@@ -451,18 +451,18 @@ function renderAll() {
   renderGallery();
 }
 
-/* ---------------- Galeri Foto ---------------- */
+/* ---------------- Photo Gallery ---------------- */
 function initGalleryFilters() {
   const devs = [...new Set(samples.map(s => s.device))].sort();
   const selDev = $('#galFilterDev');
   const curDev = selDev.value;
-  selDev.innerHTML = '<option value="all">Semua Perangkat</option>' + devs.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
+  selDev.innerHTML = '<option value="all">All Devices</option>' + devs.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join('');
   if (devs.includes(curDev)) selDev.value = curDev;
 
   const folders = [...new Set(samples.map(s => s.file.split('/')[1] || 'root'))].sort();
   const selFolder = $('#galFilterFolder');
   const curFolder = selFolder.value;
-  selFolder.innerHTML = '<option value="all">Semua Folder</option>' + folders.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('');
+  selFolder.innerHTML = '<option value="all">All Folders</option>' + folders.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('');
   if (folders.includes(curFolder)) selFolder.value = curFolder;
 }
 
@@ -487,7 +487,7 @@ function renderGallery() {
   $('#galCount').textContent = filtered.length;
   const grid = $('#galGrid');
   if (!filtered.length) {
-    grid.innerHTML = '<div class="muted" style="grid-column:1/-1;padding:20px;text-align:center">Tidak ada foto yang cocok dengan filter.</div>';
+    grid.innerHTML = '<div class="muted" style="grid-column:1/-1;padding:20px;text-align:center">No photos match the selected filter.</div>';
     return;
   }
 
@@ -535,7 +535,7 @@ function renderCatalog(groups) {
     return `<tr class="click" data-dev="${esc(d)}"><td>${esc(d)}</td><td>${arr.length}</td><td>${keys.length}</td>
       <td>${cats.map(c => `<span class="badge ${CAT_CLASS[c]}">${CAT_LABEL[c]}</span>`).join(' ')}</td></tr>`;
   });
-  $('#catBody').innerHTML = rows.join('') || '<tr><td colspan="4" class="muted">Repositori kosong. Unggah sampel di tab Akuisisi atau Import JSON.</td></tr>';
+  $('#catBody').innerHTML = rows.join('') || '<tr><td colspan="4" class="muted">Repository is empty. Ingest samples in the Ingestion tab or Import JSON.</td></tr>';
   $('#detailCard').style.display = 'none';
 }
 
@@ -543,10 +543,10 @@ function showDevice(dev) {
   const arr = samples.filter(s => s.device === dev);
   $('#detailCard').style.display = '';
   $('#detailTitle').textContent = dev;
-  $('#detailBody').innerHTML = `<div class="scroll"><table><thead><tr><th>Thumb</th><th>Berkas</th><th>Dimensi</th><th>Signature</th><th></th></tr></thead><tbody>` +
+  $('#detailBody').innerHTML = `<div class="scroll"><table><thead><tr><th>Thumbnail</th><th>File</th><th>Dimensions</th><th>Signature</th><th>Action</th></tr></thead><tbody>` +
     arr.map(s => `<tr><td>${imgTag(s, 'thumb')}</td><td class="small">${esc(s.file)}</td>
       <td>${s.displayDim || (s.width + '×' + s.height)}</td><td class="mono small">${s.dqtKey}</td>
-      <td><button class="btn sec" data-sample="${esc(s.id)}">Detail</button> <button class="btn danger" data-del="${esc(s.id)}">Hapus</button></td></tr>`).join('') +
+      <td><button class="btn sec" data-sample="${esc(s.id)}">Details</button> <button class="btn danger" data-del="${esc(s.id)}">Delete</button></td></tr>`).join('') +
     `</tbody></table></div><div id="sampleDetail"></div>`;
   $('#detailCard').scrollIntoView({ behavior: 'smooth' });
 }
@@ -558,45 +558,45 @@ function sampleDetailHtml(s) {
   const displayDim = s.displayDim || (isPortrait && s.width > s.height ? `${s.height} × ${s.width} (Portrait)` : `${s.width} × ${s.height} (Landscape)`);
   return `<h3>${esc(s.file)}</h3><div class="grid2"><div>
     <div class="thumb-detail-box ${isPortrait ? 'portrait' : 'landscape'}">${imgTag(s, 'thumb-lg')}</div>
-    <p class="small muted">${!s.thumb ? 'Tidak ada thumbnail — placeholder format ' + (s.format || 'JPEG') : s.thumbSrc === 'GENERATED' || s.thumbSrc === 'GENERATED_COLOR_ROTATED' ? 'Preview berwarna dari berkas asli' : 'Embedded thumbnail (' + (s.thumbSrc || 'EXIF') + ')'} · <b>${oriLabel}</b></p>
-    <h3>Orientasi Kamera (EXIF / TIFF)</h3>
+    <p class="small muted">${!s.thumb ? 'No thumbnail — format placeholder ' + (s.format || 'JPEG') : s.thumbSrc === 'GENERATED' || s.thumbSrc === 'GENERATED_COLOR_ROTATED' ? 'Full-color preview from source image' : 'Embedded thumbnail (' + (s.thumbSrc || 'EXIF') + ')'} · <b>${oriLabel}</b></p>
+    <h3>Camera Orientation (EXIF / TIFF)</h3>
     ${kv({
-      'Kategori Tampilan': isPortrait ? 'Portrait' : 'Landscape',
-      'Deskripsi Orientasi': s.orientationLabel || oriLabel,
-      'Nilai Angka EXIF': s.orientationNum ? String(s.orientationNum) : '1 (Default)',
-      'Penamaan TIFF/EXIF': s.orientationClassic || 'Top-Left',
-      'Deskripsi ExifTool': s.orientationExifTool || 'Horizontal (normal)',
-      'Dimensi Tampilan': displayDim,
-      'Dimensi Sensor Asli': `${s.width} × ${s.height}`
+      'Display Category': isPortrait ? 'Portrait' : 'Landscape',
+      'Orientation Description': s.orientationLabel || oriLabel,
+      'EXIF Tag Value': s.orientationNum ? String(s.orientationNum) : '1 (Default)',
+      'TIFF/EXIF Classic Name': s.orientationClassic || 'Top-Left',
+      'ExifTool Description': s.orientationExifTool || 'Horizontal (normal)',
+      'Display Dimensions': displayDim,
+      'Native Sensor Dimensions': `${s.width} × ${s.height}`
     })}
-    <h3>Metadata Kamera</h3>${kv({ Make: s.make, Model: s.model, Software: s.software || '-', ...s.exif })}</div>
-    <div><h3>Struktur Kompresi</h3>${kv({ Tipe: s.jpegType, Subsampling: s.subsampling, 'Presisi': s.precision + ' bit', 'Tabel DHT': s.dht.length + ' (hash ' + (s.dhtHash || '-') + ')', 'Restart Interval': s.dri, Marker: s.markers.join(' '), 'DQT Signature': s.dqtKey, 'Estimasi Kualitas': qualityText(s.dqt) })}</div></div>
-    <h3>Matriks Kuantisasi DQT 8×8</h3>${dqtHtml(s.dqt)}`;
+    <h3>Camera Metadata</h3>${kv({ Make: s.make, Model: s.model, Software: s.software || '-', ...s.exif })}</div>
+    <div><h3>Compression Structure</h3>${kv({ Type: s.jpegType, Subsampling: s.subsampling, Precision: s.precision + ' bits', 'DHT Tables': s.dht.length + ' (hash ' + (s.dhtHash || '-') + ')', 'Restart Interval': s.dri, Markers: s.markers.join(' '), 'DQT Signature': s.dqtKey, 'Estimated Quality': qualityText(s.dqt) })}</div></div>
+    <h3>8×8 DQT Quantization Matrix</h3>${dqtHtml(s.dqt)}`;
 }
 
 function renderClassify(groups) {
   const list = { unique: [], same: [], multi: [] };
   groups.forEach(g => list[g.cat].push(g));
-  $('#classTiles').innerHTML = [['Total signature', groups.size], ['Unique', list.unique.length], ['Shared (Same Manufacture)', list.same.length], ['Shared (Multi-Device)', list.multi.length]]
+  $('#classTiles').innerHTML = [['Total Signatures', groups.size], ['Unique', list.unique.length], ['Shared (Same Manufacture)', list.same.length], ['Shared (Multi-Device)', list.multi.length]]
     .map(([l, v]) => `<div class="tile"><b>${v}</b><span>${l}</span></div>`).join('');
   const card = g => {
     const devs = [...g.devices.keys()].sort();
-    return `<details><summary><span class="mono">${g.key}</span> · ${devs.length} perangkat · ${g.samples.length} sampel
-      ${g.variants.length > 1 ? `<span class="badge navy">${g.variants.length} varian tabel</span>` : ''}
-      ${g.cat === 'multi' ? `<span class="badge navy">${devs.length >= 5 ? '5+' : devs.length} perangkat</span>` : ''}</summary>
+    return `<details><summary><span class="mono">${g.key}</span> · ${devs.length} device${devs.length === 1 ? '' : 's'} · ${g.samples.length} sample${g.samples.length === 1 ? '' : 's'}
+      ${g.variants.length > 1 ? `<span class="badge navy">${g.variants.length} table variants</span>` : ''}
+      ${g.cat === 'multi' ? `<span class="badge navy">${devs.length >= 5 ? '5+' : devs.length} devices</span>` : ''}</summary>
       <div class="chips" style="margin:8px 0">${devs.map(d => `<span>${esc(d)}</span>`).join('')}</div>
-      <div class="small muted">Estimasi kualitas: ${qualityText(g.dqt)}${g.variants.length > 1 ? ' · varian: ' + g.variants.join(', ') : ''}</div>${dqtHtml(g.dqt)}</details>`;
+      <div class="small muted">Estimated Quality: ${qualityText(g.dqt)}${g.variants.length > 1 ? ' · variants: ' + g.variants.join(', ') : ''}</div>${dqtHtml(g.dqt)}</details>`;
   };
   for (const [c, id] of [['unique', '#clsUnique'], ['same', '#clsSame'], ['multi', '#clsMulti']])
-    $(id).innerHTML = list[c].map(card).join('') || '<span class="muted">Belum ada.</span>';
+    $(id).innerHTML = list[c].map(card).join('') || '<span class="muted">None.</span>';
 }
 
-/* ---------------- Verifikasi ---------------- */
+/* ---------------- Verification ---------------- */
 async function verify(file) {
   const buf = await file.arrayBuffer();
   const j = parseJpeg(buf);
   const box = $('#verifyResult');
-  if (!j.valid) { const fmt = detectFormat(new Uint8Array(buf, 0, Math.min(16, buf.byteLength))); box.innerHTML = `<div class="alert bad">Bukan berkas JPEG (format terdeteksi: ${esc(fmt)}).<small>Signature DQT hanya ada pada JPEG, sehingga berkas ini tidak dapat diverifikasi.</small></div><div class="card">${imgTag({ format: fmt }, 'thumb-lg')}</div>`; lastVerify = null; return; }
+  if (!j.valid) { const fmt = detectFormat(new Uint8Array(buf, 0, Math.min(16, buf.byteLength))); box.innerHTML = `<div class="alert bad">Not a JPEG file (detected format: ${esc(fmt)}).<small>DQT signatures are unique to JPEG; this file cannot be verified.</small></div><div class="card">${imgTag({ format: fmt }, 'thumb-lg')}</div>`; lastVerify = null; return; }
   const ex = readExif(buf);
   if (!ex.thumb) ex.thumb = await makePreview(buf);
   const make = normMake(ex.make), model = normModel(ex.model, ex.make);
@@ -604,7 +604,7 @@ async function verify(file) {
   const tool = [ex.software, ex.xmpTool].filter(Boolean).join(' / ');
   const edited = EDITORS.test(tool);
   const groups = groupSignatures();
-  /* Pencocokan: exact hash -> varian mirip (jarak <= NEAR) -> kandidat terdekat */
+  /* Matching logic: exact hash -> similar variant (dist <= NEAR) -> nearest candidate */
   const cands = new Map(); let nearestKey = null, nearestD = Infinity;
   if (j.dqtKey) groups.exact.forEach(e => {
     const d = e.key === j.dqtKey ? 0 : dqtDist(j.dqt, e.dqt);
@@ -614,38 +614,38 @@ async function verify(file) {
   const ranked = [...cands.entries()].sort((a, b) => a[1].d - b[1].d);
   let g = groups.byKey.get(j.dqtKey), matchType = g ? 'exact' : null;
   if (!g && nearestKey && nearestD <= NEAR) { g = groups.byKey.get(nearestKey); matchType = 'near'; }
-  const nearNote = matchType === 'near' ? ` (varian mirip, jarak ${nearestD.toFixed(2)})` : '';
+  const nearNote = matchType === 'near' ? ` (similar variant, distance ${nearestD.toFixed(2)})` : '';
   const matches = g ? [...g.devices.entries()] : [];
   const claimedKnown = claimed && samples.some(s => s.device === claimed);
   let level, title, detail;
-  if (!j.dqtKey) { level = 'warn'; title = 'Tidak ada tabel DQT'; detail = 'Signature kompresi tidak dapat diekstrak.'; }
-  else if (!samples.length) { level = 'info'; title = 'Katalog kosong'; detail = 'Muat signatures.json / Import JSON atau tambahkan sampel terlebih dahulu.'; }
+  if (!j.dqtKey) { level = 'warn'; title = 'No DQT tables found'; detail = 'Compression signature could not be extracted.'; }
+  else if (!samples.length) { level = 'info'; title = 'Catalog is empty'; detail = 'Load signatures.json / Import JSON or ingest sample images first.'; }
   else if (!g) {
-    const near = ranked[0] ? `${ranked[0][0]} (jarak ${ranked[0][1].d.toFixed(2)})` : '-';
+    const near = ranked[0] ? `${ranked[0][0]} (distance ${ranked[0][1].d.toFixed(2)})` : '-';
     if (claimedKnown) {
       const dc = cands.get(claimed).d;
-      if (dc <= CLOSE) { level = 'warn'; title = 'MIRIP tetapi tidak identik dengan signature perangkat yang diklaim'; detail = `EXIF mengklaim ${claimed}; jarak DQT terdekat ${dc.toFixed(2)}. Mungkin varian tabel baru perangkat tersebut atau gambar diproses ulang. Kandidat terdekat: ${near}.`; }
-      else { level = 'bad'; title = 'MISMATCH — signature tidak cocok dengan klaim EXIF'; detail = `EXIF mengklaim ${claimed}, perangkat itu ada di katalog tetapi jaraknya ${dc.toFixed(2)} dari signature gambar ini. Kandidat terdekat: ${near}.`; }
-    } else { level = 'info'; title = 'Signature tidak ada di katalog'; detail = `Tidak dapat diidentifikasi pasti. Kandidat terdekat: ${near}.` + (claimed ? ` Klaim EXIF: ${claimed} (belum ada di katalog).` : ''); }
-  } else if (!claimed) { level = 'info'; title = 'Kandidat perangkat ditemukan (EXIF Make/Model kosong)' + nearNote; detail = 'Signature cocok dengan perangkat di bawah.'; }
-  else if (g.devices.has(claimed)) { level = g.devices.size === 1 ? 'ok' : 'warn'; title = (g.devices.size === 1 ? 'COCOK — signature konsisten dengan klaim EXIF' : 'Konsisten dengan klaim EXIF, namun signature dipakai bersama') + nearNote; detail = g.devices.size === 1 ? 'Signature unik untuk perangkat ini.' : `Signature dipakai ${g.devices.size} perangkat, sehingga identifikasi tidak definitif.`; }
-  else if ([...g.devices.values()].includes(make)) { level = 'bad'; title = 'MISMATCH — merek cocok, model berbeda' + nearNote; detail = `EXIF mengklaim ${claimed}, signature milik model lain dari merek yang sama.`; }
-  else { level = 'bad'; title = 'MISMATCH — klaim EXIF berbeda dengan signature kompresi' + nearNote; detail = `EXIF mengklaim ${claimed}, tetapi signature DQT cocok dengan perangkat lain.`; }
+      if (dc <= CLOSE) { level = 'warn'; title = 'SIMILAR but not identical to claimed device signature'; detail = `EXIF claims ${claimed}; nearest DQT distance is ${dc.toFixed(2)}. Possible new quantization variant or reprocessed image. Closest candidate: ${near}.`; }
+      else { level = 'bad'; title = 'MISMATCH — signature does not match EXIF claim'; detail = `EXIF claims ${claimed}, which exists in the catalog, but its distance is ${dc.toFixed(2)} from this image signature. Closest candidate: ${near}.`; }
+    } else { level = 'info'; title = 'Signature not found in catalog'; detail = `Definitive identification unavailable. Closest candidate: ${near}.` + (claimed ? ` EXIF claim: ${claimed} (not yet in catalog).` : ''); }
+  } else if (!claimed) { level = 'info'; title = 'Candidate device found (EXIF Make/Model empty)' + nearNote; detail = 'Signature matches the devices listed below.'; }
+  else if (g.devices.has(claimed)) { level = g.devices.size === 1 ? 'ok' : 'warn'; title = (g.devices.size === 1 ? 'MATCH — signature consistent with EXIF claim' : 'Consistent with EXIF claim, but signature is shared') + nearNote; detail = g.devices.size === 1 ? 'Signature is unique to this device.' : `Signature is shared across ${g.devices.size} devices, so identification is not definitive.`; }
+  else if ([...g.devices.values()].includes(make)) { level = 'bad'; title = 'MISMATCH — matching manufacturer, different model' + nearNote; detail = `EXIF claims ${claimed}, but signature belongs to another model from the same manufacturer.`; }
+  else { level = 'bad'; title = 'MISMATCH — EXIF claim differs from compression signature' + nearNote; detail = `EXIF claims ${claimed}, but the DQT signature matches a completely different device.`; }
 
   lastVerify = { file: file.name, claimed, level, title, detail, matches: matches.map(m => m[0]), cat: g ? g.cat : null, j, ex, tool, edited, key: j.dqtKey, dims: j.sof ? j.sof.width + ' x ' + j.sof.height : '-' };
   const kv = o => '<div class="kv">' + Object.entries(o).map(([k, v]) => `<div>${esc(k)}</div><div>${esc(v)}</div>`).join('') + '</div>';
   box.innerHTML = `<div class="alert ${level}">${esc(title)}<small>${esc(detail)}</small></div>
-    ${edited ? `<div class="alert warn">Peringatan: tag software menunjukkan editing pihak ketiga (${esc(tool)}). Hasil kurang dapat diandalkan.<small>Signature DQT bisa berasal dari aplikasi editor, bukan kamera.</small></div>` : ''}
+    ${edited ? `<div class="alert warn">Warning: software metadata indicates third-party editing (${esc(tool)}). Results may be unreliable.<small>DQT signature may originate from image editing software rather than the camera.</small></div>` : ''}
     <div class="card"><div class="grid2"><div>
-      ${imgTag({ thumb: ex.thumb, format: 'JPEG' }, 'thumb-lg')}<p class="small muted">${ex.thumb ? (ex.thumbSrc ? 'Embedded thumbnail' : 'Preview dari gambar') : 'Placeholder JPEG'}</p>
-      <h3>Klaim EXIF &amp; Metadata</h3>${kv({ Berkas: file.name, 'Make / Model': claimed || '-', Software: tool || '-', Dimensi: lastVerify.dims, ...(ex.params || {}) })}</div>
-      <div><h3>Hasil Pencocokan</h3>${kv({ 'DQT Signature': j.dqtKey || '-', Kategori: g ? CAT_LABEL[g.cat] : '-', 'Jenis Kecocokan': matchType === 'exact' ? 'Exact (hash identik)' : matchType === 'near' ? 'Varian mirip' : 'Tidak ada', 'Estimasi Kualitas': qualityText(j.dqt), Tipe: j.jpegType || '-', Subsampling: j.subsampling || '-' })}
-      <h3>Perangkat Cocok di Katalog</h3>
-      <div class="chips">${matches.map(([d]) => `<span>${esc(d)}</span>`).join('') || '<span class="muted">Tidak ada</span>'}</div></div></div>
-      <h3>Kandidat Terdekat (jarak DQT)</h3>
-      <div class="scroll" style="max-height:220px"><table><thead><tr><th>Perangkat</th><th>Jarak</th><th>Kemiripan</th></tr></thead><tbody>${ranked.slice(0, 8).map(([d, c]) => `<tr><td>${esc(d)}${d === claimed ? ' <span class="badge navy">klaim EXIF</span>' : ''}</td><td>${c.d === Infinity ? '-' : c.d.toFixed(2)}</td><td>${simPct(c.d).toFixed(1)}%</td></tr>`).join('') || '<tr><td colspan="3" class="muted">-</td></tr>'}</tbody></table></div>
-      <h3>Matriks DQT</h3>${dqtHtml(j.dqt)}
-      <p><button class="btn" id="btnVerifyPdf">Unduh Laporan PDF</button></p></div>`;
+      ${imgTag({ thumb: ex.thumb, format: 'JPEG' }, 'thumb-lg')}<p class="small muted">${ex.thumb ? (ex.thumbSrc ? 'Embedded thumbnail' : 'Source image preview') : 'JPEG Placeholder'}</p>
+      <h3>EXIF Claim &amp; Metadata</h3>${kv({ File: file.name, 'Make / Model': claimed || '-', Software: tool || '-', Dimensions: lastVerify.dims, ...(ex.params || {}) })}</div>
+      <div><h3>Match Result</h3>${kv({ 'DQT Signature': j.dqtKey || '-', Category: g ? CAT_LABEL[g.cat] : '-', 'Match Type': matchType === 'exact' ? 'Exact (identical hash)' : matchType === 'near' ? 'Similar variant' : 'None', 'Estimated Quality': qualityText(j.dqt), Type: j.jpegType || '-', Subsampling: j.subsampling || '-' })}
+      <h3>Matching Devices in Catalog</h3>
+      <div class="chips">${matches.map(([d]) => `<span>${esc(d)}</span>`).join('') || '<span class="muted">None</span>'}</div></div></div>
+      <h3>Nearest Candidates (DQT distance)</h3>
+      <div class="scroll" style="max-height:220px"><table><thead><tr><th>Device</th><th>Distance</th><th>Similarity</th></tr></thead><tbody>${ranked.slice(0, 8).map(([d, c]) => `<tr><td>${esc(d)}${d === claimed ? ' <span class="badge navy">EXIF claim</span>' : ''}</td><td>${c.d === Infinity ? '-' : c.d.toFixed(2)}</td><td>${simPct(c.d).toFixed(1)}%</td></tr>`).join('') || '<tr><td colspan="3" class="muted">-</td></tr>'}</tbody></table></div>
+      <h3>DQT Matrix</h3>${dqtHtml(j.dqt)}
+      <p><button class="btn" id="btnVerifyPdf">Download PDF Report</button></p></div>`;
 }
 
 /* ---------------- PDF ---------------- */
@@ -660,7 +660,7 @@ function pdfDoc() {
     },
     gap(h = 3) { y += h; },
     need(h) { if (y + h > 282) { doc.addPage(); y = 15; } },
-    img(d, w, h) { try { api.need(h + 2); doc.addImage(d, 'JPEG', 15, y, w, h); y += h + 3; } catch (e) { /* abaikan */ } },
+    img(d, w, h) { try { api.need(h + 2); doc.addImage(d, 'JPEG', 15, y, w, h); y += h + 3; } catch (e) { /* ignore */ } },
     dqt(dqt) {
       Object.keys(dqt).sort().forEach(id => {
         api.need(50); api.line('DQT Tq' + id + (id == 0 ? ' (Luminance)' : id == 1 ? ' (Chrominance)' : ''), 9, true);
@@ -676,31 +676,31 @@ function pdfDoc() {
 function verifyPdf() {
   const v = lastVerify; if (!v) return;
   const p = pdfDoc();
-  p.line('Laporan Verifikasi JPEG Signature', 16, true);
-  p.line('Dibuat: ' + new Date().toLocaleString(), 9); p.gap();
-  p.line('Berkas: ' + v.file); p.line('Klaim EXIF: ' + (v.claimed || '-')); p.line('Software: ' + (v.tool || '-') + (v.edited ? '  [TERINDIKASI DIEDIT]' : ''));
-  p.line('Dimensi: ' + v.dims); p.line('DQT Signature: ' + (v.key || '-')); p.line('Tipe / Subsampling: ' + (v.j.jpegType || '-') + ' / ' + (v.j.subsampling || '-')); p.gap();
-  p.line('Kesimpulan: ' + v.title, 12, true); p.line(v.detail);
-  p.line('Perangkat cocok di katalog: ' + (v.matches.join(', ') || '-')); p.gap();
+  p.line('JPEG Signature Verification Report', 16, true);
+  p.line('Generated: ' + new Date().toLocaleString('en-US'), 9); p.gap();
+  p.line('File: ' + v.file); p.line('EXIF Claim: ' + (v.claimed || '-')); p.line('Software: ' + (v.tool || '-') + (v.edited ? '  [INDICATES EDITING]' : ''));
+  p.line('Dimensions: ' + v.dims); p.line('DQT Signature: ' + (v.key || '-')); p.line('Type / Subsampling: ' + (v.j.jpegType || '-') + ' / ' + (v.j.subsampling || '-')); p.gap();
+  p.line('Conclusion: ' + v.title, 12, true); p.line(v.detail);
+  p.line('Matching devices in catalog: ' + (v.matches.join(', ') || '-')); p.gap();
   if (v.ex.thumb) p.img(v.ex.thumb, 40, 30);
   p.dqt(v.j.dqt);
   Object.entries(v.ex.params || {}).forEach(([k, val]) => p.line(k + ': ' + val, 9));
-  p.doc.save('verifikasi-' + v.file.replace(/\.[^.]+$/, '') + '.pdf');
+  p.doc.save('verification-' + v.file.replace(/\.[^.]+$/, '') + '.pdf');
 }
 
 function catalogPdf() {
   const groups = groupSignatures(), p = pdfDoc();
-  p.line('Laporan Katalog JPEG Signature', 16, true);
-  p.line('Dibuat: ' + new Date().toLocaleString(), 9);
-  p.line(`Sampel: ${samples.length} | Perangkat: ${new Set(samples.map(s => s.device)).size} | Signature: ${groups.size}`); p.gap();
+  p.line('JPEG Signature Catalog Report', 16, true);
+  p.line('Generated: ' + new Date().toLocaleString('en-US'), 9);
+  p.line(`Samples: ${samples.length} | Devices: ${new Set(samples.map(s => s.device)).size} | Signatures: ${groups.size}`); p.gap();
   ['unique', 'same', 'multi'].forEach(c => {
     p.line(CAT_LABEL[c], 12, true);
     const l = [...groups.values()].filter(g => g.cat === c);
-    if (!l.length) p.line('(kosong)', 9);
+    if (!l.length) p.line('(empty)', 9);
     l.forEach(g => p.line(g.key + '  ->  ' + [...g.devices.keys()].sort().join('; '), 9));
     p.gap();
   });
-  p.doc.save('katalog-signature.pdf');
+  p.doc.save('signature-catalog.pdf');
 }
 
 /* ---------------- Export / Import ---------------- */
@@ -714,12 +714,12 @@ async function importJson(file) {
   try {
     const d = JSON.parse(await file.text());
     const arr = Array.isArray(d) ? d : d.samples;
-    if (!Array.isArray(arr) || arr.some(s => !s.id || !s.dqtKey || !s.dqt)) throw new Error('Format tidak valid');
+    if (!Array.isArray(arr) || arr.some(s => !s.id || !s.dqtKey || !s.dqt)) throw new Error('Invalid signature format');
     const ids = new Set(samples.map(s => s.id));
     const fresh = arr.filter(s => !ids.has(s.id));
     await DB.putMany(fresh); samples = samples.concat(fresh); renderAll();
-    toast(`Import: ${fresh.length} sampel baru (${arr.length - fresh.length} duplikat dilewati)`);
-  } catch (e) { toast('Import gagal: ' + e.message); }
+    toast(`Import: ${fresh.length} new samples (${arr.length - fresh.length} duplicates skipped)`);
+  } catch (e) { toast('Import failed: ' + e.message); }
 }
 async function loadBundled(url = 'signatures.json', replace = false) {
   try {
@@ -739,7 +739,7 @@ async function loadBundled(url = 'signatures.json', replace = false) {
       const key = newItem.file || newItem.id;
       const existing = map.get(key) || samples.find(s => s.file === newItem.file || s.id === newItem.id);
       if (existing) {
-        // Force update thumbnail base64 terbaru
+        // Force update latest full-color thumbnail base64
         if (newItem.thumb && newItem.thumb.length > 50) {
           existing.thumb = newItem.thumb;
           existing.thumbSrc = newItem.thumbSrc || 'GENERATED';
@@ -780,7 +780,7 @@ async function loadBundled(url = 'signatures.json', replace = false) {
       renderAll();
       return samples.length;
     }
-    toast(`${url} tidak dapat dimuat`); return 0;
+    toast(`Failed to load ${url}`); return 0;
   }
 }
 
@@ -816,7 +816,7 @@ function init() {
     const ids = new Set(samples.map(s => s.id));
     const fresh = []; staged.forEach(s => { if (s.status === 'accepted' && !ids.has(s.rec.id)) { ids.add(s.rec.id); fresh.push(s.rec); } });
     await DB.putMany(fresh); samples = samples.concat(fresh); renderAll();
-    toast(`${fresh.length} sampel disimpan ke repositori`);
+    toast(`${fresh.length} samples saved to repository`);
   };
   $('#catBody').onclick = e => { const tr = e.target.closest('tr[data-dev]'); if (tr) showDevice(tr.dataset.dev); };
   $('#detailBody').onclick = async e => {
@@ -830,8 +830,8 @@ function init() {
   };
   $('#btnExport').onclick = exportJson;
   $('#fileImport').onchange = e => { if (e.target.files[0]) importJson(e.target.files[0]); e.target.value = ''; };
-  $('#btnReset').onclick = async () => { if (confirm('Ganti repositori lokal dengan isi signatures.json?')) { const n = await loadBundled('signatures.json', true); toast(`Dimuat ${n} sampel dari signatures.json`); } };
-  $('#btnClear').onclick = async () => { if (confirm('Hapus seluruh repositori lokal?')) { await DB.clear(); samples = []; renderAll(); } };
+  $('#btnReset').onclick = async () => { if (confirm('Replace local repository with default signatures.json?')) { const n = await loadBundled('signatures.json', true); toast(`Loaded ${n} samples from signatures.json`); } };
+  $('#btnClear').onclick = async () => { if (confirm('Clear the entire local repository?')) { await DB.clear(); samples = []; renderAll(); } };
   $('#btnCatalogPdf').onclick = catalogPdf;
   $('#inVerify').onchange = e => { if (e.target.files[0]) verify(e.target.files[0]); e.target.value = ''; };
   $('#verifyResult').onclick = e => { if (e.target.id === 'btnVerifyPdf') verifyPdf(); };
@@ -857,20 +857,20 @@ function init() {
     await DB.open();
     samples = await DB.all();
   } catch (e) {
-    toast('IndexedDB tidak tersedia; data hanya di memori');
+    toast('IndexedDB is not available; data is stored in memory only');
     DB.putMany = DB.clear = async () => {};
     DB.tx = async () => {};
   }
 
-  // Periksa apakah database kosong ATAU ada sampel yang thumbnail-nya belum ada/rusak/grayscale MPF lama
+  // Check if database is empty OR has legacy/grayscale MPF thumbnails
   const needUpdate = !samples || !samples.length || samples.some(s => !s.thumb || s.thumb.length < 50 || s.thumbSrc === 'MPF' || !s.orientationLabel);
   const bundle = window.DEFAULT_SIGNATURES;
   const build = bundle && bundle.build ? String(bundle.build) : '';
-  let stored = ''; try { stored = localStorage.getItem('jsa-build') || ''; } catch (e) { /* abaikan */ }
+  let stored = ''; try { stored = localStorage.getItem('jsa-build') || ''; } catch (e) { /* ignore */ }
 
   if (bundle && (needUpdate || (build && stored !== build) || (bundle.samples && samples.length < bundle.samples.length))) {
     await loadBundled('signatures.json', false);
-    try { localStorage.setItem('jsa-build', build); } catch (e) { /* abaikan */ }
+    try { localStorage.setItem('jsa-build', build); } catch (e) { /* ignore */ }
   } else {
     renderAll();
   }

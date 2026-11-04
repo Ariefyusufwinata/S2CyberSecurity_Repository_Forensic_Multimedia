@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 
 <head>
   <meta charset="utf-8">
@@ -14,37 +14,37 @@
     <div class="brand">
       <div>
         <h1>JPEG <span>Signature</span> Analyzer</h1>
-        <p>Forensik kamera lewat tabel kuantisasi · 100% di browser, tanpa server</p>
+        <p>Camera hardware forensics via quantization tables &middot; 100% in-browser, no server</p>
       </div>
     </div>
     <div class="head-stats">
-      <div><b id="statSamples">0</b><span>Sampel</span></div>
-      <div><b id="statDevices">0</b><span>Perangkat</span></div>
-      <div><b id="statSigs">0</b><span>Signature</span></div>
+      <div><b id="statSamples">0</b><span>Samples</span></div>
+      <div><b id="statDevices">0</b><span>Devices</span></div>
+      <div><b id="statSigs">0</b><span>Signatures</span></div>
     </div>
   </header>
   <nav id="tabs">
-    <button data-tab="ingest" class="active"><i>⬆</i><span>Akuisisi</span></button>
-    <button data-tab="gallery"><i>▦</i><span>Galeri</span></button>
-    <button data-tab="catalog"><i>☰</i><span>Katalog</span></button>
-    <button data-tab="classify"><i>◈</i><span>Klasifikasi</span></button>
-    <button data-tab="verify"><i>✔</i><span>Verifikasi</span></button>
-    <button data-tab="repo"><i>⚙</i><span>Repositori</span></button>
+    <button data-tab="ingest" class="active"><i>⬆</i><span>Ingestion</span></button>
+    <button data-tab="gallery"><i>▦</i><span>Gallery</span></button>
+    <button data-tab="catalog"><i>☰</i><span>Catalog</span></button>
+    <button data-tab="classify"><i>◈</i><span>Classification</span></button>
+    <button data-tab="verify"><i>✔</i><span>Verification</span></button>
+    <button data-tab="repo"><i>⚙</i><span>Repository</span></button>
   </nav>
   <main>
 
     <section id="ingest" class="tab active">
       <div class="card">
-        <h2>Akuisisi Berkas Lokal</h2>
+        <h2>Local File Acquisition</h2>
         <div class="drop" id="drop">
           <div class="drop-ico">⬆</div>
-          <div class="drop-title">Seret &amp; lepas gambar, folder, atau .zip ke sini</div>
-          <div class="small">atau pilih dari perangkat Anda</div>
+          <div class="drop-title">Drag &amp; drop images, folders, or .zip archives here</div>
+          <div class="small">or choose directly from your local device</div>
           <div class="row">
-            <label class="btn">Pilih File (multiple)<input type="file" id="inFiles" multiple
+            <label class="btn">Select Files (Multiple)<input type="file" id="inFiles" multiple
                 accept="image/*,.jpg,.jpeg,.jfif,.heic,.heif,.avif,.tif,.tiff,.bmp,.webp,.png,.gif"></label>
-            <label class="btn">Pilih Folder<input type="file" id="inFolder" webkitdirectory directory multiple></label>
-            <label class="btn">Pilih ZIP<input type="file" id="inZip" accept=".zip,application/zip" multiple></label>
+            <label class="btn">Select Folder<input type="file" id="inFolder" webkitdirectory directory multiple></label>
+            <label class="btn">Select ZIP Archive<input type="file" id="inZip" accept=".zip,application/zip" multiple></label>
           </div>
           <div class="progress">
             <div id="bar"></div>
@@ -53,33 +53,31 @@
         </div>
       </div>
       <div class="card">
-        <h2>Hasil Penyaringan</h2>
-        <p class="small muted">Tahap 1: validasi header biner JPEG (FF D8 FF) · Tahap 2: eliminasi gambar yang diedit
-          software pihak ketiga (Photoshop, GIMP, dll.) · Tahap 3: EXIF Make/Model harus tersedia sebagai label
-          perangkat.</p>
+        <h2>Filtering &amp; Screening Results</h2>
+        <p class="small muted">Stage 1: Binary JPEG SOI validation (FF D8 FF) &middot; Stage 2: Elimination of third-party software edits (Photoshop, GIMP, etc.) &middot; Stage 3: EXIF Make/Model presence required as hardware ground-truth.</p>
         <div class="tiles" id="ingestTiles"></div>
         <div class="repo-actions" style="margin-bottom:10px">
-          <button class="btn" id="btnAddAccepted" disabled>Simpan yang Lolos ke Repositori</button>
+          <button class="btn" id="btnAddAccepted" disabled>Save Accepted to Repository</button>
           <select id="filterStatus">
-            <option value="all">Tampilkan semua</option>
-            <option value="accepted">Lolos</option>
-            <option value="rejected">Ditolak</option>
+            <option value="all">Show All</option>
+            <option value="accepted">Accepted</option>
+            <option value="rejected">Rejected</option>
           </select>
         </div>
         <div class="scroll">
           <table>
             <thead>
               <tr>
-                <th>Thumb</th>
-                <th>Berkas</th>
-                <th>Perangkat (EXIF)</th>
+                <th>Thumbnail</th>
+                <th>Filename</th>
+                <th>Device (EXIF)</th>
                 <th>Software</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody id="ingestBody">
               <tr>
-                <td colspan="5" class="muted">Belum ada berkas.</td>
+                <td colspan="5" class="muted">No files ingested yet.</td>
               </tr>
             </tbody>
           </table>
@@ -89,21 +87,21 @@
 
     <section id="gallery" class="tab">
       <div class="card">
-        <h2>Galeri &amp; Katalog Foto</h2>
+        <h2>Photo Catalog &amp; Gallery</h2>
         <div class="filters">
-          <input type="text" id="galSearch" placeholder="Cari nama berkas / perangkat / signature...">
+          <input type="text" id="galSearch" placeholder="Search filename, device, signature...">
           <select id="galFilterDev">
-            <option value="all">Semua Perangkat</option>
+            <option value="all">All Devices</option>
           </select>
           <select id="galFilterFolder">
-            <option value="all">Semua Folder</option>
+            <option value="all">All Folders</option>
           </select>
           <select id="galFilterOri">
-            <option value="all">Semua Orientasi</option>
+            <option value="all">All Orientations</option>
             <option value="Portrait">Portrait</option>
             <option value="Landscape">Landscape</option>
           </select>
-          <span class="stat">Ditemukan: <b id="galCount">0</b></span>
+          <span class="stat">Found: <b id="galCount">0</b></span>
         </div>
         <div class="gallery-grid" id="galGrid"></div>
       </div>
@@ -111,15 +109,15 @@
 
     <section id="catalog" class="tab">
       <div class="card">
-        <h2>Katalog Perangkat</h2>
+        <h2>Device Catalog</h2>
         <div class="scroll">
           <table>
             <thead>
               <tr>
-                <th>Perangkat</th>
-                <th>Sampel</th>
-                <th>Jumlah Signature</th>
-                <th>Kategori</th>
+                <th>Device</th>
+                <th>Samples</th>
+                <th>Signatures Count</th>
+                <th>Category</th>
               </tr>
             </thead>
             <tbody id="catBody"></tbody>
@@ -127,37 +125,36 @@
         </div>
       </div>
       <div class="card" id="detailCard" style="display:none">
-        <h2 id="detailTitle">Detail</h2>
+        <h2 id="detailTitle">Details</h2>
         <div id="detailBody"></div>
       </div>
     </section>
 
     <section id="classify" class="tab">
       <div class="card">
-        <h2>Klasifikasi Signature (berdasarkan DQT)</h2>
+        <h2>Signature Classification (Based on DQT)</h2>
         <div class="tiles" id="classTiles"></div>
-        <button class="btn sec" id="btnCatalogPdf">Laporan Katalog (PDF)</button>
+        <button class="btn sec" id="btnCatalogPdf">Catalog Report (PDF)</button>
       </div>
       <div class="card">
-        <h2>Unique <span class="small muted">· 1 model perangkat</span></h2>
+        <h2>Unique <span class="small muted">&middot; Exclusive to 1 device model</span></h2>
         <div id="clsUnique"></div>
       </div>
       <div class="card">
-        <h2>Shared (Same Manufacture) <span class="small muted">· 2 model, merek sama</span></h2>
+        <h2>Shared (Same Manufacture) <span class="small muted">&middot; Shared by 2 models from the same brand</span></h2>
         <div id="clsSame"></div>
       </div>
       <div class="card">
-        <h2>Shared (Multi-Device) <span class="small muted">· 3, 4, 5+ perangkat (atau 2 merek berbeda)</span></h2>
+        <h2>Shared (Multi-Device) <span class="small muted">&middot; Shared across 3, 4, or 5+ devices</span></h2>
         <div id="clsMulti"></div>
       </div>
     </section>
 
     <section id="verify" class="tab">
       <div class="card">
-        <h2>Verifikasi &amp; Identifikasi Forensik</h2>
-        <p class="small muted">Unggah 1 gambar target. Signature DQT dicocokkan dengan katalog aktif, lalu dibandingkan
-          dengan klaim Make/Model di EXIF.</p>
-        <label class="btn">Pilih Gambar Target<input type="file" id="inVerify"
+        <h2>Forensic Verification &amp; Identification</h2>
+        <p class="small muted">Upload 1 target test image. The DQT compression signature is matched against the active catalog and cross-checked against claimed EXIF Make/Model.</p>
+        <label class="btn">Select Target Image<input type="file" id="inVerify"
             accept="image/*,.jpg,.jpeg,.jfif,.heic,.heif,.avif,.tif,.tiff,.bmp,.webp,.png,.gif"></label>
       </div>
       <div id="verifyResult"></div>
@@ -165,42 +162,40 @@
 
     <section id="repo" class="tab">
       <div class="card">
-        <h2>Manajemen Repositori</h2>
-        <p class="small muted">Data tersimpan di IndexedDB browser ini. Gunakan Export/Import untuk berbagi dataset
-          signature dengan orang lain.</p>
+        <h2>Repository Management</h2>
+        <p class="small muted">All forensic data is stored locally in your browser's IndexedDB. Use Export and Import to share datasets with peers.</p>
       </div>
       <div class="action-grid">
         <div class="action">
           <h3>Export JSON</h3>
-          <p>Unduh seluruh repositori aktif (sampel, DQT, metadata, thumbnail) sebagai file <span
-              class="mono">signatures.json</span>.</p>
-          <button class="btn" id="btnExport">Unduh Dataset</button>
+          <p>Download the entire active repository (samples, DQT matrices, metadata, previews) as a standard <span
+              class="mono">signatures.json</span> file.</p>
+          <button class="btn" id="btnExport">Export Dataset</button>
         </div>
         <div class="action">
           <h3>Import JSON</h3>
-          <p>Gabungkan dataset dari file .json ke repositori. Sampel yang sudah ada dilewati otomatis.</p>
-          <label class="btn">Pilih File JSON<input type="file" id="fileImport" accept=".json,application/json"></label>
+          <p>Merge external signatures dataset into the local repository. Duplicate records are automatically skipped.</p>
+          <label class="btn">Select JSON File<input type="file" id="fileImport" accept=".json,application/json"></label>
         </div>
         <div class="action">
-          <h3>Dataset Bawaan</h3>
-          <p>Ganti isi repositori dengan dataset bawaan aplikasi (<span class="mono">signatures.json</span>, 146 sampel
-            dari folder images).</p>
-          <button class="btn sec" id="btnReset">Muat Dataset Bawaan</button>
+          <h3>Default Dataset</h3>
+          <p>Reset and reload the bundled default dataset (<span class="mono">signatures.json</span>, 146 camera samples from images).</p>
+          <button class="btn sec" id="btnReset">Reload Default Dataset</button>
         </div>
         <div class="action">
-          <h3>Kosongkan</h3>
-          <p>Hapus seluruh sampel dari repositori lokal. Tindakan ini tidak bisa dibatalkan.</p>
-          <button class="btn danger" id="btnClear">Hapus Semua</button>
+          <h3>Clear Database</h3>
+          <p>Permanently remove all samples from local browser storage. This action cannot be undone.</p>
+          <button class="btn danger" id="btnClear">Clear All</button>
         </div>
       </div>
       <div class="card" style="margin-top:20px">
-        <h2>Atribusi &amp; Sumber Data</h2>
-        <p style="margin:4px 0 8px">Sampel dataset foto dalam repositori ini bersumber dari:</p>
+        <h2>Dataset Credits &amp; Attribution</h2>
+        <p style="margin:4px 0 8px">The sample photo dataset in this repository is sourced from:</p>
         <p class="small" style="line-height:1.7;margin:0">
-          <b>Pemilik Data:</b> Mandatos PT Francisco Beltrão<br>
+          <b>Data Owner &amp; Copyright:</b> Mandatos PT Francisco Beltrão<br>
           <b>Platform:</b> Flickr (<a href="https://www.flickr.com/photos/202288615@N07" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:underline">https://www.flickr.com/photos/202288615@N07</a>)<br>
-          <b>Album / Koleksi:</b> <i>Encontro de Conselhos Tutelares (29/10/2026)</i> &amp; <i>Visita na Ocupação do São Francisco (23/09/2026)</i><br>
-          <b>Penggunaan:</b> Riset &amp; Analisis Forensik Multimedia (Pendidikan / Akademik S2 Cyber Security). Hak cipta foto sepenuhnya milik pembuat dan pemilik akun Flickr terkait.
+          <b>Collections / Albums:</b> <i>Encontro de Conselhos Tutelares (29/10/2026)</i> &amp; <i>Visita na Ocupação do São Francisco (23/09/2026)</i><br>
+          <b>Usage:</b> Academic research &amp; multimedia forensic analysis (Master of Cyber Security program). All original image rights remain with the author and Flickr account holder.
         </p>
       </div>
     </section>
@@ -209,7 +204,7 @@
   <footer class="app-footer">
     <div>JPEG Signature Analyzer &amp; Database &middot; 100% Client-Side Multimedia Forensic Tool</div>
     <div class="small muted" style="margin-top:4px">
-      Data sampel foto bersumber dari <a href="https://www.flickr.com/photos/202288615@N07" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:none">Flickr &mdash; Mandatos PT Francisco Beltrão</a> untuk keperluan riset &amp; edukasi forensik multimedia.
+      Sample photos sourced from <a href="https://www.flickr.com/photos/202288615@N07" target="_blank" rel="noopener noreferrer" style="color:var(--accent);text-decoration:none">Flickr &mdash; Mandatos PT Francisco Beltrão</a> for academic multimedia forensic research.
     </div>
   </footer>
   <div class="toast" id="toast"></div>
@@ -217,8 +212,8 @@
   <div id="photoModal" class="modal-overlay" style="display:none">
     <div class="modal-content">
       <div class="modal-head">
-        <h2 id="modalTitle">Detail Foto</h2>
-        <button class="btn sec" id="btnCloseModal">Tutup</button>
+        <h2 id="modalTitle">Photo Details</h2>
+        <button class="btn sec" id="btnCloseModal">Close</button>
       </div>
       <div id="modalBody"></div>
     </div>
