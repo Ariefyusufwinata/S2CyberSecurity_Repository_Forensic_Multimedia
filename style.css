@@ -91,10 +91,8 @@ tr.click:hover td{background:var(--panel2)}
 .badge.navy{background:var(--navy-hi);color:#fff}
 
 .thumb{max-width:60px;max-height:50px;width:auto;height:auto;object-fit:contain;border-radius:6px;background:#050914;display:block}
-.thumb-detail-box{background:#050914;border:1px solid var(--line);border-radius:12px;padding:10px;display:inline-flex;align-items:center;justify-content:center;max-width:100%;margin-bottom:8px}
-.thumb-detail-box.portrait{max-width:320px}
-.thumb-detail-box.landscape{max-width:480px}
-.thumb-lg{max-width:100%;max-height:400px;width:auto;height:auto;object-fit:contain;border-radius:8px;display:block}
+.thumb-detail-box{background:#050914;border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;align-items:center;justify-content:center;width:100%;height:300px;margin-bottom:8px;overflow:hidden}
+.thumb-lg{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;border-radius:8px;display:block}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
 .kv{display:grid;grid-template-columns:140px 1fr;gap:5px 12px;font-size:13.5px}
 .kv div:nth-child(odd){color:var(--muted)}
@@ -119,22 +117,21 @@ details summary{cursor:pointer;line-height:1.8}
 
 /* ---------- Galeri ---------- */
 .filters{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:6px;align-items:center}
-.gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-top:16px;align-items:start}
-.photo-card{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;cursor:pointer;display:flex;flex-direction:column;transition:transform .15s,border-color .15s}
+.gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-top:16px}
+.photo-card{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;cursor:pointer;display:flex;flex-direction:column;height:100%;transition:transform .15s,border-color .15s}
 .photo-card:hover{border-color:var(--accent);transform:translateY(-3px)}
 
-/* Kotak preview foto mengikuti bentuk aslinya */
-.photo-img-wrap{width:100%;background:#050914;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;border-bottom:1px solid var(--line)}
-.photo-card.portrait .photo-img-wrap{height:250px}
-.photo-card.landscape .photo-img-wrap{height:160px}
+/* Kotak preview foto berukuran tetap (uniform) agar grid rapi dan sejajar */
+.photo-img-wrap{width:100%;height:180px;background:#050914;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;border-bottom:1px solid var(--line)}
 
 .photo-card img.gal-img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block;transition:transform .2s ease}
 .photo-card:hover img.gal-img{transform:scale(1.03)}
-.photo-badge{position:absolute;top:8px;right:8px;background:#0d1428;border:1px solid var(--line);border-radius:6px;font-size:10px;font-weight:700;padding:2px 6px;color:var(--muted);letter-spacing:.3px;text-transform:uppercase}
+.photo-badge{position:absolute;top:8px;right:8px;background:#0d1428;border:1px solid var(--line);border-radius:6px;font-size:10px;font-weight:700;padding:2px 6px;color:var(--muted);letter-spacing:.3px;text-transform:uppercase;z-index:2}
 .photo-badge.portrait{color:var(--accent);border-color:var(--navy-hi);background:#131d3a}
-.photo-info{padding:12px;font-size:12.5px;display:flex;flex-direction:column;gap:3px;flex-grow:1;min-width:0}
+.photo-info{padding:12px;font-size:12.5px;display:flex;flex-direction:column;gap:4px;flex-grow:1;min-width:0;justify-content:flex-start}
 .photo-name{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);font-size:13px}
-.photo-dev{color:var(--accent);font-weight:600}
+.photo-dev{color:var(--accent);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.photo-info .small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .photo-info .mono{overflow:hidden;text-overflow:ellipsis}
 
 /* ---------- Modal ---------- */
@@ -190,8 +187,7 @@ details summary{cursor:pointer;line-height:1.8}
   select,input[type=text]{font-size:16px;width:100%}
   .repo-actions .btn{flex:1 1 100%}
   .gallery-grid{grid-template-columns:repeat(2,1fr);gap:10px}
-  .photo-card.portrait .photo-img-wrap{height:190px}
-  .photo-card.landscape .photo-img-wrap{height:125px}
+  .photo-img-wrap{height:135px}
   .photo-info{padding:9px;font-size:11.5px}
   .kv{grid-template-columns:105px 1fr;font-size:12.5px}
   .dqt td{width:27px;height:25px;font-size:10px}
