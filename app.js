@@ -404,7 +404,7 @@ function renderIngest() {
     <td class="small">${esc(s.name)}</td>
     <td><b>${esc(s.rec ? s.rec.device : '-')}</b>${s.rec && s.rec.rawModel && s.rec.rawModel !== s.rec.model ? `<div class="small muted">EXIF Model: ${esc(s.rec.rawModel)}</div>` : ''}</td>
     <td class="small mono">${esc(s.rec ? s.rec.software : '')}</td>
-    <td>${s.status === 'accepted' ? '<span class="badge ok">Accepted &amp; Saved</span> <span class="small muted">Click row for details</span>' : `<span class="badge bad">Rejected</span> <span class="small muted">${esc(s.reason)}</span>`}</td></tr>`).join('')
+    <td>${s.status === 'accepted' ? `<span class="badge ok">Accepted &amp; Saved</span> ${s.rec ? `<button class="btn sec" data-sample-pdf="${esc(s.rec.id)}" style="padding:3px 8px;font-size:11px;margin-left:6px">PDF</button>` : ''}` : `<span class="badge bad">Rejected</span> <span class="small muted">${esc(s.reason)}</span>`}</td></tr>`).join('')
     : '<tr><td colspan="5" class="muted">No data available.</td></tr>';
 }
 
@@ -505,6 +505,7 @@ function renderGallery() {
         <div class="photo-dev">${esc(s.device)}</div>
         <div class="small muted">${dimText} · ${esc(exifDesc)}</div>
         <div class="small muted">${esc(folder)} · <span class="mono" title="DQT Key: ${s.dqtKey}">${s.dqtKey}</span></div>
+        <button class="btn sec" data-sample-pdf="${esc(s.id)}" style="margin-top:6px;padding:4px 8px;font-size:11px;width:100%">Download Forensic PDF</button>
       </div>
     </div>`;
   }).join('');
@@ -539,10 +540,11 @@ function showDevice(dev) {
   const arr = samples.filter(s => s.device === dev);
   $('#detailCard').style.display = '';
   $('#detailTitle').textContent = dev;
-  $('#detailBody').innerHTML = `<div class="scroll"><table><thead><tr><th>Thumbnail</th><th>File</th><th>Dimensions</th><th>Signature</th><th>Action</th></tr></thead><tbody>` +
+  $('#detailBody').innerHTML = `<div class="row" style="margin-bottom:10px"><button class="btn" data-dev-pdf="${esc(dev)}">Download Device Samples PDF (${arr.length} files)</button></div>
+    <div class="scroll"><table><thead><tr><th>Thumbnail</th><th>File</th><th>Dimensions</th><th>Signature</th><th>Action</th></tr></thead><tbody>` +
     arr.map(s => `<tr><td>${imgTag(s, 'thumb')}</td><td class="small">${esc(s.file)}</td>
       <td>${s.displayDim || (s.width + '×' + s.height)}</td><td class="mono small">${s.dqtKey}</td>
-      <td><button class="btn sec" data-sample="${esc(s.id)}">Details</button> <button class="btn danger" data-del="${esc(s.id)}">Delete</button></td></tr>`).join('') +
+      <td><button class="btn sec" data-sample="${esc(s.id)}">Details</button> <button class="btn" data-sample-pdf="${esc(s.id)}">PDF</button> <button class="btn danger" data-del="${esc(s.id)}">Delete</button></td></tr>`).join('') +
     `</tbody></table></div><div id="sampleDetail"></div>`;
   $('#detailCard').scrollIntoView({ behavior: 'smooth' });
 }
@@ -555,7 +557,11 @@ function sampleDetailHtml(s) {
   const exifDesc = s.orientationExifTool || (isPortrait ? 'Rotate 90 CW' : 'Horizontal (normal)');
   const displayDim = s.displayDim || (isPortrait && s.width > s.height ? `${s.height} × ${s.width} (Portrait)` : `${s.width} × ${s.height} (Landscape)`);
   const th = s.thumbSig || {}, hRows = huffRows(s.huff);
-  return `<h3>${esc(s.file)}</h3><div class="grid2"><div>
+  return `<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">
+      <h3 style="margin:0">${esc(s.file)}</h3>
+      <button class="btn" data-sample-pdf="${esc(s.id)}">Download Sample Forensic PDF</button>
+    </div>
+    <div class="grid2"><div>
     <div class="thumb-detail-box ${isPortrait ? 'portrait' : 'landscape'}">${imgTag(s, 'thumb-lg')}</div>
     <p class="small muted">${!s.thumb ? 'No thumbnail — format placeholder ' + (s.format || 'JPEG') : s.thumbSrc === 'GENERATED' || s.thumbSrc === 'GENERATED_COLOR_ROTATED' ? 'Full-color preview from source image' : 'Embedded thumbnail (' + (s.thumbSrc || 'EXIF') + ')'} · <b>${oriLabel}</b> (${esc(exifDesc)})</p>
     <h3>Camera Orientation (EXIF / TIFF)</h3>
@@ -581,7 +587,8 @@ function sampleDetailHtml(s) {
     })}</div></div>
     <h3>8×8 DQT Quantization Matrix</h3>${dqtHtml(s.dqt)}
     <h3>Huffman Tables (DHT): BITS[1..15] Code-Length Counts (90 features)</h3>
-    <div class="scroll"><table><thead><tr><th>Table</th><th>BITS[1..15]</th><th>Symbols</th><th>Kraft Sum</th><th>Kraft Valid</th></tr></thead><tbody>${hRows.map(r => `<tr><td>${r.label}</td><td class="mono small">${r.counts.join(' ')}</td><td>${r.total}</td><td>${r.kraftSum.toFixed(4)}</td><td>${r.valid ? 'yes' : 'NO'}</td></tr>`).join('')}</tbody></table></div>`;
+    <div class="scroll"><table><thead><tr><th>Table</th><th>BITS[1..15]</th><th>Symbols</th><th>Kraft Sum</th><th>Kraft Valid</th></tr></thead><tbody>${hRows.map(r => `<tr><td>${r.label}</td><td class="mono small">${r.counts.join(' ')}</td><td>${r.total}</td><td>${r.kraftSum.toFixed(4)}</td><td>${r.valid ? 'yes' : 'NO'}</td></tr>`).join('')}</tbody></table></div>
+    <div class="row" style="margin-top:12px"><button class="btn" data-sample-pdf="${esc(s.id)}">Download Sample Forensic PDF</button></div>`;
 }
 
 function renderClassify(groups) {
@@ -805,9 +812,114 @@ function verifyPdf() {
   p.doc.save('verification-' + v.file.replace(/\.[^.]+$/, '') + '.pdf');
 }
 
+function samplePdf(s) {
+  if (!s) return;
+  const groups = groupSignatures(), g = groups.byKey.get(s.dqtKey);
+  const isPortrait = isSamplePortrait(s);
+  const exifDesc = s.orientationExifTool || (isPortrait ? 'Rotate 90 CW' : 'Horizontal (normal)');
+  const dispDim = s.displayDim || (isPortrait && s.width > s.height ? `${s.height} x ${s.width}` : `${s.width} x ${s.height}`);
+  const th = s.thumbSig || {}, hRows = huffRows(s.huff), fKey = fullKeyOf(s);
+  const p = pdfDoc();
+  p.line('JPEG Forensic Sample Report (Repository Evidence)', 15, true);
+  p.line('Generated: ' + new Date().toLocaleString('en-US'), 9); p.gap();
+  if (s.thumb && s.thumb.startsWith('data:image/jpeg')) p.img(s.thumb, isPortrait ? 30 : 40, isPortrait ? 40 : 30);
+
+  p.line('1. Evidence File & Device Identity', 12, true);
+  [
+    'File Path: ' + s.file,
+    'Collection Folder: ' + (s.file.split('/')[1] || 'root'),
+    'File Size: ' + (s.size ? s.size.toLocaleString('en-US') + ' bytes' : '-'),
+    'Manufacturer (Make): ' + (s.make || '-'),
+    'Resolved Model: ' + (s.model || '-'),
+    ...(s.rawModel && s.rawModel !== s.model ? ['EXIF Model Code: ' + s.rawModel] : []),
+    'Device Name: ' + (s.device || '-'),
+    'Firmware / Software: ' + (s.software || '-')
+  ].forEach(t => p.line(t, 9));
+  p.gap();
+
+  p.line('2. Camera Orientation (EXIF / TIFF)', 12, true);
+  [
+    'ExifTool Description: ' + exifDesc,
+    'Is Horizontal (ExifTool): ' + (!isPortrait ? 'Yes — Horizontal / Landscape' : 'No (' + exifDesc + ') — Portrait'),
+    'Display Category: ' + (isPortrait ? 'Portrait' : 'Landscape'),
+    'EXIF Orientation Tag Value: ' + (s.orientationNum ? String(s.orientationNum) : '1 (Default)'),
+    'TIFF/EXIF Classic Name: ' + (s.orientationClassic || 'Top-Left'),
+    'Display Dimensions: ' + dispDim,
+    'Native Sensor Dimensions (SOF): ' + s.width + ' x ' + s.height
+  ].forEach(t => p.line(t, 9));
+  p.gap();
+
+  p.line('3. Compression Parameters & 576-Feature Signature', 12, true);
+  const sharedDevs = g ? [...g.devices.keys()].sort().join('; ') : s.device;
+  [
+    'JPEG Type / Subsampling: ' + (s.jpegType || '-') + ' / ' + (s.subsampling || '-') + ' (' + (s.precision || 8) + ' bits)',
+    'DHT Tables: ' + (s.dht ? s.dht.length : 0) + ' (hash ' + (s.dhtHash || '-') + ') | Restart Interval (DRI): ' + (s.dri || 0),
+    'JPEG Markers (hex): ' + ((s.markers || []).join(' ') || '-'),
+    'DQT Signature Hash (192 features): ' + (s.dqtKey || '-'),
+    'Full Signature Hash (576 features): ' + fKey,
+    'Signature Classification: ' + (g ? CAT_LABEL[g.cat] : 'Unique') + ' (shared across: ' + sharedDevs + ')',
+    'Estimated IJG Quality: ' + qualityText(s.dqt),
+    'Embedded Thumbnail (284 features): ' + (th.present ? th.w + ' x ' + th.h : 'absent (zeros)'),
+    'EXIF IFD Entry Counts [IFD0, Exif, Interop, IFD1, GPS, extra IFDs, extra entries, errors]: ' + ((s.exifStruct || []).join(', ') || '-')
+  ].forEach(t => p.line(t, 9));
+  p.gap();
+
+  p.line('4. Camera Shooting Metadata (EXIF)', 12, true);
+  const exifEntries = Object.entries(s.exif || {});
+  if (exifEntries.length) exifEntries.forEach(([k, val]) => p.line(k + ': ' + val, 9));
+  else p.line('(No additional EXIF shooting tags recorded)', 9);
+  p.gap();
+
+  p.line('5. 8x8 DQT Quantization Matrices (192 features)', 12, true);
+  p.dqt(s.dqt);
+  p.gap();
+
+  p.line('6. Huffman Tables (DHT): BITS[1..15] Code-Length Counts (90 features)', 12, true);
+  pdfHuff(p, hRows);
+  pdfMethod(p);
+
+  const baseName = s.file.split('/').pop().replace(/\.[^.]+$/, '');
+  p.doc.save('sample-forensic-' + baseName + '.pdf');
+}
+
+function devicePdf(dev) {
+  const arr = samples.filter(s => s.device === dev);
+  if (!arr.length) return;
+  const groups = groupSignatures(), p = pdfDoc();
+  p.line('Device Forensic Profile & Sample Inventory: ' + dev, 15, true);
+  p.line('Generated: ' + new Date().toLocaleString('en-US'), 9);
+  const dqtKeys = [...new Set(arr.map(s => s.dqtKey))];
+  const fullKeys = [...new Set(arr.map(s => fullKeyOf(s)))];
+  p.line(`Total Samples: ${arr.length} | Distinct DQT Signatures: ${dqtKeys.length} | Distinct 576-Feature Signatures: ${fullKeys.length}`, 9);
+  p.gap();
+
+  p.line('1. Quantization & Huffman Profile Summary', 12, true);
+  dqtKeys.forEach(k => {
+    const g = groups.byKey.get(k);
+    const rep = arr.find(s => s.dqtKey === k);
+    p.line(`DQT Key: ${k} | Category: ${g ? CAT_LABEL[g.cat] : 'Unique'} | Quality: ${qualityText(rep.dqt)} | Samples: ${arr.filter(s => s.dqtKey === k).length}`, 9, true);
+    p.dqt(rep.dqt);
+  });
+  p.line('Representative Huffman Tables (BITS[1..15]):', 11, true);
+  pdfHuff(p, huffRows(arr[0].huff));
+
+  p.line('2. Complete Sample Inventory (' + arr.length + ' files)', 12, true);
+  arr.forEach((s, i) => {
+    const isP = isSamplePortrait(s);
+    const exifDesc = s.orientationExifTool || (isP ? 'Rotate 90 CW' : 'Horizontal (normal)');
+    const th = s.thumbSig || {};
+    p.line(`${i + 1}. ${s.file}`, 9, true);
+    p.line(`   Size: ${s.size || '-'} B | Sensor: ${s.width}x${s.height} | Orientation: ${isP ? 'Portrait' : 'Landscape'} (${exifDesc}) | Software: ${s.software || '-'}`, 8);
+    p.line(`   DQT(192): ${s.dqtKey} | Full(576): ${fullKeyOf(s)} | Thumb: ${th.present ? th.w + 'x' + th.h : 'none'} | EXIF IFDs: ${(s.exifStruct || []).join(',')}`, 8);
+  });
+  p.gap();
+  pdfMethod(p);
+  p.doc.save('device-' + dev.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.pdf');
+}
+
 function catalogPdf() {
   const groups = groupSignatures(), p = pdfDoc();
-  p.line('JPEG Signature Catalog Report', 16, true);
+  p.line('JPEG Signature Catalog & Repository Evidence Report', 16, true);
   p.line('Generated: ' + new Date().toLocaleString('en-US'), 9);
   p.line(`Samples: ${samples.length} | Devices: ${new Set(samples.map(s => s.device)).size} | DQT signature families: ${groups.size}`); p.gap();
   p.line('Equivalence Class Analysis', 12, true);
@@ -825,6 +937,14 @@ function catalogPdf() {
     if (!l.length) p.line('(empty)', 9);
     l.forEach(g => p.line(g.key + '  ->  ' + [...g.devices.keys()].sort().join('; '), 9));
     p.gap();
+  });
+  p.line('Repository Sample Inventory (' + samples.length + ' files)', 12, true);
+  samples.forEach((s, i) => {
+    const isP = isSamplePortrait(s);
+    const exifDesc = s.orientationExifTool || (isP ? 'Rotate 90 CW' : 'Horizontal (normal)');
+    const th = s.thumbSig || {};
+    p.line(`${i + 1}. ${s.file} [${s.device}]`, 8, true);
+    p.line(`   Sensor: ${s.width}x${s.height} | ${isP ? 'Portrait' : 'Landscape'} (${exifDesc}) | DQT: ${s.dqtKey} | Full(576): ${fullKeyOf(s)} | Thumb: ${th.present ? th.w + 'x' + th.h : 'none'} | IFDs: ${(s.exifStruct || []).join(',')}`, 8);
   });
   p.doc.save('signature-catalog.pdf');
 }
@@ -1014,12 +1134,30 @@ function init() {
     }
   };
 
+  // Global handler for per-sample PDF and per-device PDF buttons across all views/modals
+  document.addEventListener('click', e => {
+    const pdfBtn = e.target.closest('[data-sample-pdf]');
+    if (pdfBtn) {
+      e.stopPropagation();
+      const id = pdfBtn.dataset.samplePdf;
+      const found = samples.find(s => s.id === id) || (staged.map(x => x.rec).find(r => r && r.id === id));
+      if (found) samplePdf(found);
+      return;
+    }
+    const devPdfBtn = e.target.closest('[data-dev-pdf]');
+    if (devPdfBtn) {
+      e.stopPropagation();
+      devicePdf(devPdfBtn.dataset.devPdf);
+    }
+  });
+
   // Gallery events
   $('#galSearch').oninput = renderGallery;
   $('#galFilterDev').onchange = renderGallery;
   $('#galFilterFolder').onchange = renderGallery;
   if ($('#galFilterOri')) $('#galFilterOri').onchange = renderGallery;
   $('#galGrid').onclick = e => {
+    if (e.target.closest('[data-sample-pdf]')) return;
     const card = e.target.closest('[data-gal-id]');
     if (card) openPhotoModal(card.dataset.galId);
   };
