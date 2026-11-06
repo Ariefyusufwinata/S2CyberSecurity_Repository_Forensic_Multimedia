@@ -266,6 +266,26 @@ function thumbSigOf(es, buf) {
   return th;
 }
 
+/* ---------------- Deterministic EXIF Value Checksum / Hash ----------------
+ * Generates an immutable 64-bit checksum of the image's EXIF metadata tags,
+ * shooting parameters, timestamps, and camera identity to prevent duplicate evidence
+ * from being ingested into the database multiple times. */
+function exifChecksum(ex) {
+  if (!ex) return '';
+  const tags = ex.tags || {};
+  const keys = Object.keys(tags).filter(k => k !== 'Thumbnail' && k !== 'thumbnail' && k !== 'MakerNote').sort();
+  const serialized = keys.map(k => {
+    const tag = tags[k];
+    const val = tag ? (tag.description ?? tag.value ?? '') : '';
+    return k + ':' + (Array.isArray(val) ? val.join(',') : String(val));
+  }).join(';');
+  const p = ex.params || {};
+  const identity = (ex.make || '') + '|' + (ex.model || '') + '|' + (ex.software || '') + '|' +
+    (p['Date/Time Original'] || '') + '|' + (p['Exposure'] || '') + '|' + (p['ISO'] || '') + '|' +
+    (p['F-Number'] || '') + '|' + (p['Focal Length'] || '') + '|' + (p['Orientation'] || '');
+  return hash(identity + '#' + serialized);
+}
+
 /* ---------------- 6. Quantization Distance, IJG Quality & Editing Trace Formulas ----------------
  * IJG Annex K scaling formula for quality factor Q in [1..100]:
  *   scale(Q) = 5000 / Q  (if Q < 50),   200 - 2*Q  (if Q >= 50)
@@ -413,7 +433,7 @@ const CAT_CLASS = { unique: 'ok', same: 'warn', multi: 'bad' };
 if (typeof globalThis !== 'undefined') {
   Object.assign(globalThis, {
     ZZ, EDITORS, CAMERA_FW, hash, HUFF_LABELS, huffSets, huffVector, huffInfo, huffRows,
-    parseJpeg, pad, dqt192, sigParts, sigVector, fullKeyOf, exifStruct, thumbSigOf,
+    parseJpeg, pad, dqt192, sigParts, sigVector, fullKeyOf, exifStruct, thumbSigOf, exifChecksum,
     FLICKR_SIZES, isFlickrResize, STD_LUM, STD_CHR, scaleQ, SOFTWARE_BASELINES,
     ijgMatch, editTraces, NEAR, CLOSE, dqtDist, simPct, estimateQuality, qualityText,
     eqStats, EQ_SETS, MIN_CONFIG_SAMPLES, configStats, outlierCheck, groupSignatures,

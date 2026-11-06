@@ -219,7 +219,9 @@ function analyzeImage(name, buf, size = 0) {
     exif: ex.params || {},
     huff: j.huff,
     exifStruct: es.counts,
-    thumbSig: th
+    thumbSig: th,
+    exifChecksum: exifChecksum(ex),
+    exifHash: exifChecksum(ex)
   };
   qRec.fullKey = fullKeyOf(qRec);
 
@@ -367,11 +369,17 @@ function matchRecord(qRec, rawAnalysis, catalogSamples) {
   else { fullLevel = 'info'; fullText = `Full signature matches: ${fullDevs.join('; ')}.`; }
 
   const ijg = ijgMatch(j.dqt);
+  const dupMatch = samples.find(s => (s.exifChecksum && s.exifChecksum === qRec.exifChecksum) || s.id === qRec.id);
 
   return {
     valid: true,
     file: qRec.file,
     size: qRec.size,
+    duplicate: {
+      isDuplicate: Boolean(dupMatch),
+      duplicateOf: dupMatch ? (dupMatch.file || dupMatch.id) : null,
+      exifChecksum: qRec.exifChecksum
+    },
     claimed: {
       make,
       model,
@@ -385,6 +393,7 @@ function matchRecord(qRec, rawAnalysis, catalogSamples) {
     signatures: {
       dqtKey: qRec.dqtKey,
       fullKey: qRec.fullKey,
+      exifChecksum: qRec.exifChecksum,
       dhtHash: qRec.dhtHash,
       estimatedQuality: qualityText(j.dqt),
       subsampling: qRec.subsampling,

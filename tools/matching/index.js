@@ -66,10 +66,17 @@ function printCliReport(res, showMatrix = false) {
   console.log(`\n${c.bold}${c.cyan}🧬 COMPRESSION SIGNATURES (576 FEATURES):${c.reset}`);
   console.log(`   DQT Key (192):  ${c.bold}${c.magenta}${res.signatures.dqtKey}${c.reset}`);
   console.log(`   Full Key (576): ${c.bold}${c.magenta}${res.signatures.fullKey}${c.reset}`);
+  console.log(`   EXIF Checksum:  ${c.bold}${c.magenta}${res.signatures.exifChecksum || '-'}${c.reset}`);
   console.log(`   Quality Factor: ${res.signatures.estimatedQuality}`);
   console.log(`   Subsampling:    ${res.signatures.subsampling} (${res.signatures.jpegType})`);
   console.log(`   Thumbnail JPEG: ${res.signatures.thumbnailPresent ? 'Present (284 features)' : 'Absent'}`);
   console.log(`   EXIF IFD Count: ${res.signatures.exifIFDCounts.join(', ')} (8 features)`);
+
+  // Duplicate Check against catalog
+  if (res.duplicate && res.duplicate.isDuplicate) {
+    console.log(`\n${c.bgYellow}${c.bold} ℹ️  CATALOG DUPLICATE DETECTED ${c.reset}`);
+    console.log(`   ${c.yellow}EXIF checksum matches existing sample in database: ${c.bold}${res.duplicate.duplicateOf}${c.reset}`);
+  }
 
   // Anti-Tampering Check
   if (res.tampering.edited || (res.tampering.traces && res.tampering.traces.length)) {

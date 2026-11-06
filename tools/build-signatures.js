@@ -81,10 +81,21 @@ function stripExifApp1(u8) {
     }
     (it.status === 'accepted' ? out : rej).push(it.status === 'accepted' ? it.rec : it);
   }
-  const seen = new Set(), samples = out.filter(s => !seen.has(s.id) && seen.add(s.id));
+  const seenId = new Set(), seenExif = new Set(), dup = [], samples = [];
+  for (const s of out) {
+    const chk = s.exifChecksum || s.exifHash;
+    if (seenId.has(s.id) || (chk && seenExif.has(chk))) {
+      dup.push(s);
+    } else {
+      seenId.add(s.id);
+      if (chk) seenExif.add(chk);
+      samples.push(s);
+    }
+  }
   fs.writeFileSync(sigPath, JSON.stringify({ format: 'jpeg-signature-repository', version: 1, build: Date.now(), samples }));
   fs.writeFileSync(path.join(__dirname, '../dataset.js'), 'window.DEFAULT_SIGNATURES = ' + fs.readFileSync(sigPath, 'utf8') + ';\n');
-  console.log('Accepted (unique):', samples.length, '| Accepted (files):', out.length, '| Rejected (edited/invalid):', rej.length);
+  console.log('Accepted (unique):', samples.length, '| Duplicates skipped:', dup.length, '| Accepted (files):', out.length, '| Rejected (edited/invalid):', rej.length);
+  if (dup.length) dup.slice(0, 5).forEach(d => console.log(' - [DUPLICATE SKIPPED]', d.file, 'EXIF checksum:', d.exifChecksum));
   rej.slice(0, 10).forEach(r => console.log(' - [REJECTED]', r.name, '->', r.reason));
   const g = {}; samples.forEach(s => (g[s.device + ' | ' + s.dqtKey] = (g[s.device + ' | ' + s.dqtKey] || 0) + 1));
   console.log(g);

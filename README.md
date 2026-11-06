@@ -263,10 +263,11 @@ Finally, `verify(file)` cross-references the **normalized EXIF device claim (`cl
   - Multiple file selection
   - Folder upload (`webkitdirectory`)
   - Direct browser `.zip` archive extraction using JSZip
-- **Automatic 3-Stage Filtering Pipeline:**
+- **Automatic 4-Stage Filtering Pipeline:**
   1. **Binary JPEG Validation:** Verifies the `FF D8 FF` SOI header. Non-JPEG formats (PNG, WEBP, GIF, etc.) are accurately identified and flagged.
-  2. **Third-Party Editor Elimination:** Automatically detects and rejects images processed or modified by software editors (e.g., Photoshop, GIMP, Lightroom, Snapseed, Canva).
+  2. **Third-Party Editor Elimination:** Automatically detects and rejects images processed or modified by software editors (e.g., Photoshop, GIMP, Lightroom, Snapseed, Canva, Meitu, Instagram).
   3. **Device Metadata Verification:** Ensures camera hardware labels (`Make` & `Model`) are present in EXIF.
+  4. **EXIF Checksum & Evidence Deduplication:** Calculates a deterministic 64-bit checksum of the EXIF metadata values. If a sample with the identical EXIF checksum already exists in the active catalog or upload batch, it is automatically prevented from being re-uploaded to the database and is clearly flagged with a **Duplicate (Skipped)** badge.
 
 ### 2. Photo Gallery & Smart Orientation
 - Visual catalog of all repository samples with adaptive aspect ratios:
@@ -354,7 +355,8 @@ Each file passes these checks in order; the first failing check gives the reject
 | 3 | **Editing traces without a Software tag** | APP13 `Photoshop 3.0` (8BIM) or APP14 `Adobe` marker; XMP edit history (`xmpMM:History`, `stEvt:action`); quantization tables **exactly equal to the IJG standard tables** (Q1–100) |
 | 4 | **Flickr resize derivatives**: long side 75, 100, 150, 240, 320, 500, 640, 800, 1024, 1600 or 2048 px | Re-compressed copies with Flickr's own tables |
 | 5 | EXIF `Make` and `Model` present | Ground truth for the device label |
-| 6 | **Signature outlier** (after analysis, against the catalog): if the device already has at least 3 samples, the new DQT must be within a mean step difference of 2.0 of one of them | Re-encoded files or a wrong Make/Model. Samples of one camera cluster tightly (Samsung variants differ by ≤ 0.02), so a large distance is suspicious. New devices are not screened |
+| 6 | **EXIF Checksum / Hash Deduplication** | Identical EXIF metadata checksum already exists in catalog or upload batch; skips duplicate evidence and flags with a "Duplicate" warning badge |
+| 7 | **Signature outlier** (after analysis, against the catalog): if the device already has at least 3 samples, the new DQT must be within a mean step difference of 2.0 of one of them | Re-encoded files or a wrong Make/Model. Samples of one camera cluster tightly (Samsung variants differ by ≤ 0.02), so a large distance is suspicious. New devices are not screened |
 
 None of the 198 camera files in the bundled dataset trigger checks 3 or 4. Check 3 was also tested with synthetic files carrying a Photoshop APP13 block, an Adobe APP14 marker, XMP history and an XMP `CreatorTool`; all were rejected while the unmodified original was accepted.
 

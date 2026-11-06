@@ -314,6 +314,7 @@ async function analyze(name, buf, size) {
   const tool = [ex.software, ex.xmpTool].filter(Boolean).join(' / ');
   const { make, model, rawModel, device } = resolveDeviceMeta(ex.make, ex.model, tool);
   const es = exifStruct(buf), th = thumbSigOf(es, buf);
+  const exChk = exifChecksum(ex);
   item.rec = {
     id: name + '|' + size + '|' + j.dqtKey, file: name, size,
     format: 'JPEG', make, model, rawModel: rawModel || model, device,
@@ -325,7 +326,8 @@ async function analyze(name, buf, size) {
     dqtKey: j.dqtKey, dqt: j.dqt, jpegType: j.jpegType || '', subsampling: j.subsampling || '',
     precision: j.sof ? j.sof.precision : 0, dht: j.dht, dhtHash: j.dhtHash, dri: j.dri,
     markers: j.markers.map(m => m.toString(16).toUpperCase()), exif: ex.params || {}, thumb: ex.thumb, thumbSrc: ex.thumbSrc || '',
-    huff: j.huff, exifStruct: es.counts, thumbSig: th
+    huff: j.huff, exifStruct: es.counts, thumbSig: th,
+    exifChecksum: exChk, exifHash: exChk
   };
   item.rec.fullKey = fullKeyOf(item.rec);
   item.edited = EDITORS.test(tool);
@@ -360,10 +362,49 @@ async function ingest(files) {
   const jobs = await collect([...files]);
   if (!jobs.length) { toast('No JPEG files found'); return; }
   staged = [];
+
+  // Build index of existing EXIF checksums and IDs already in database (IndexedDB / samples)
+  const existingExif = new Map();
+  (samples || []).forEach(s => {
+    const chk = s.exifChecksum || s.exifHash;
+    if (chk) existingExif.set(chk, s);
+    if (s.id) existingExif.set(s.id, s);
+  });
+  const batchExif = new Map();
+
   for (let i = 0; i < jobs.length; i++) {
     try {
       const buf = await jobs[i].get();
-      staged.push(await analyze(jobs[i].name, buf, buf.byteLength));
+      const it = await analyze(jobs[i].name, buf, buf.byteLength);
+
+      // Duplicate detection: check if EXIF checksum matches an existing sample or an earlier file in this batch
+      if (it.status === 'accepted' && it.rec) {
+        const chk = it.rec.exifChecksum;
+        if (chk && existingExif.has(chk)) {
+          const match = existingExif.get(chk);
+          it.status = 'duplicate';
+          it.duplicate = true;
+          it.duplicateOf = match.file || match.id;
+          it.reason = `Duplicate: EXIF checksum (${chk.slice(0, 10)}) matches existing sample in database ("${match.file || match.device}")`;
+        } else if (existingExif.has(it.rec.id)) {
+          const match = existingExif.get(it.rec.id);
+          it.status = 'duplicate';
+          it.duplicate = true;
+          it.duplicateOf = match.file || match.id;
+          it.reason = `Duplicate: File signature already exists in database ("${match.file || match.device}")`;
+        } else if (chk && batchExif.has(chk)) {
+          const match = batchExif.get(chk);
+          it.status = 'duplicate';
+          it.duplicate = true;
+          it.duplicateOf = match.name;
+          it.reason = `Duplicate: EXIF checksum (${chk.slice(0, 10)}) matches earlier file in this upload batch ("${match.name}")`;
+        } else {
+          if (chk) batchExif.set(chk, it);
+          batchExif.set(it.rec.id, it);
+        }
+      }
+
+      staged.push(it);
     } catch (e) { staged.push({ name: jobs[i].name, status: 'rejected', reason: 'Failed to read: ' + e.message }); }
     if (i % 5 === 0 || i === jobs.length - 1) {
       $('#bar').style.width = ((i + 1) / jobs.length * 100) + '%';
@@ -371,18 +412,22 @@ async function ingest(files) {
       await new Promise(r => setTimeout(r));
     }
   }
+
   /* Outlier screening against the catalog (needs the existing repository, so it runs after per-file analysis) */
   staged.forEach(it => {
     if (it.status !== 'accepted') return;
     const why = outlierCheck(it.rec);
     if (why) { it.status = 'rejected'; it.outlier = true; it.reason = why; }
   });
-  /* Automatically save accepted samples into the active repository so they immediately appear in Catalog, Gallery, Classification & Verification */
+
+  /* Automatically save accepted samples (duplicates and rejected files are excluded) */
   const ids = new Set((samples || []).map(s => s.id));
+  const exSet = new Set((samples || []).map(s => s.exifChecksum || s.exifHash).filter(Boolean));
   const fresh = [];
   staged.forEach(s => {
-    if (s.status === 'accepted' && s.rec && !ids.has(s.rec.id)) {
+    if (s.status === 'accepted' && s.rec && !ids.has(s.rec.id) && !exSet.has(s.rec.exifChecksum)) {
       ids.add(s.rec.id);
+      if (s.rec.exifChecksum) exSet.add(s.rec.exifChecksum);
       fresh.push(s.rec);
     }
   });
@@ -390,21 +435,35 @@ async function ingest(files) {
     await DB.putMany(fresh);
     samples = samples.concat(fresh);
     renderAll();
-    toast(`Analyzed & saved ${fresh.length} accepted sample(s) to repository`);
+    const dupCount = staged.filter(s => s.status === 'duplicate').length;
+    toast(`Saved ${fresh.length} new accepted sample(s)${dupCount ? ` (${dupCount} duplicates skipped)` : ''}`);
+  } else {
+    const dupCount = staged.filter(s => s.status === 'duplicate').length;
+    if (dupCount) toast(`${dupCount} duplicate sample(s) detected and skipped`);
   }
   renderIngest();
 }
 
 function renderIngest() {
   const acc = staged.filter(s => s.status === 'accepted').length;
+  const dupes = staged.filter(s => s.status === 'duplicate').length;
   const inval = staged.filter(s => s.valid === false).length;
   const ed = staged.filter(s => s.edited).length;
   const reasonIs = (s, p) => s.status === 'rejected' && (s.reason || '').startsWith(p);
   const resized = staged.filter(s => reasonIs(s, 'Resized')).length;
   const outliers = staged.filter(s => s.outlier).length;
   const nometa = staged.filter(s => s.valid && !s.edited && s.status === 'rejected').length - resized - outliers;
-  $('#ingestTiles').innerHTML = [['Total', staged.length], ['Accepted', acc], ['Invalid JPEG', inval], ['Edited (tag or traces)', ed], ['Resized (Flickr)', resized], ['Signature Outlier', outliers], ['Missing Metadata/DQT', nometa]]
-    .map(([l, v]) => `<div class="tile"><b>${v}</b><span>${l}</span></div>`).join('');
+  $('#ingestTiles').innerHTML = [
+    ['Total', staged.length],
+    ['Accepted', acc],
+    ['Duplicate (Skipped)', dupes],
+    ['Invalid JPEG', inval],
+    ['Edited (tag or traces)', ed],
+    ['Resized (Flickr)', resized],
+    ['Signature Outlier', outliers],
+    ['Missing Metadata/DQT', nometa]
+  ].map(([l, v]) => `<div class="tile"><b>${v}</b><span>${l}</span></div>`).join('');
+
   $('#btnAddAccepted').disabled = !acc;
   const f = $('#filterStatus').value;
   const rows = staged.map((s, idx) => ({ s, idx })).filter(({ s }) => f === 'all' || s.status === f);
@@ -413,7 +472,11 @@ function renderIngest() {
     <td class="small">${esc(s.name)}</td>
     <td><b>${esc(s.rec ? s.rec.device : '-')}</b>${s.rec && s.rec.rawModel && s.rec.rawModel !== s.rec.model ? `<div class="small muted">EXIF Model: ${esc(s.rec.rawModel)}</div>` : ''}</td>
     <td class="small mono">${esc(s.rec ? s.rec.software : '')}</td>
-    <td>${s.status === 'accepted' ? `<span class="badge ok">Accepted &amp; Saved</span> ${s.rec ? `<button class="btn sec" data-sample-pdf="${esc(s.rec.id)}" style="padding:3px 8px;font-size:11px;margin-left:6px">PDF</button>` : ''}` : `<span class="badge bad">Rejected</span> <span class="small muted">${esc(s.reason)}</span>`}</td></tr>`).join('')
+    <td>${s.status === 'accepted'
+      ? `<span class="badge ok">Accepted &amp; Saved</span> ${s.rec ? `<button class="btn sec" data-sample-pdf="${esc(s.rec.id)}" style="padding:3px 8px;font-size:11px;margin-left:6px">PDF</button>` : ''}`
+      : s.status === 'duplicate'
+      ? `<span class="badge warn">Duplicate</span> <span class="small muted">${esc(s.reason)}</span>`
+      : `<span class="badge bad">Rejected</span> <span class="small muted">${esc(s.reason)}</span>`}</td></tr>`).join('')
     : '<tr><td colspan="5" class="muted">No data available.</td></tr>';
 }
 
@@ -1051,6 +1114,8 @@ async function autoDiscoverImagesFolder() {
         const buf = await r.arrayBuffer();
         const it = await analyze(relPath, buf, buf.byteLength);
         if (it.status === 'accepted' && it.rec) {
+          const chk = it.rec.exifChecksum;
+          if (chk && samples.some(s => (s.exifChecksum || s.exifHash) === chk)) continue;
           it.rec.bundled = true;
           fresh.push(it.rec);
         }
@@ -1107,10 +1172,24 @@ function init() {
     }
   };
   $('#btnAddAccepted').onclick = async () => {
-    const ids = new Set(samples.map(s => s.id));
-    const fresh = []; staged.forEach(s => { if (s.status === 'accepted' && !ids.has(s.rec.id)) { ids.add(s.rec.id); fresh.push(s.rec); } });
-    await DB.putMany(fresh); samples = samples.concat(fresh); renderAll();
-    toast(`${fresh.length} samples saved to repository`);
+    const ids = new Set((samples || []).map(s => s.id));
+    const exSet = new Set((samples || []).map(s => s.exifChecksum || s.exifHash).filter(Boolean));
+    const fresh = [];
+    staged.forEach(s => {
+      if (s.status === 'accepted' && s.rec && !ids.has(s.rec.id) && !exSet.has(s.rec.exifChecksum)) {
+        ids.add(s.rec.id);
+        if (s.rec.exifChecksum) exSet.add(s.rec.exifChecksum);
+        fresh.push(s.rec);
+      }
+    });
+    if (fresh.length) {
+      await DB.putMany(fresh);
+      samples = samples.concat(fresh);
+      renderAll();
+      toast(`${fresh.length} samples saved to repository`);
+    } else {
+      toast('No new samples to save (all duplicates or already in repository)');
+    }
   };
   $('#catBody').onclick = e => { const tr = e.target.closest('tr[data-dev]'); if (tr) showDevice(tr.dataset.dev); };
   $('#detailBody').onclick = async e => {
@@ -1132,7 +1211,12 @@ function init() {
     if (e.target.id === 'btnVerifyPdf') verifyPdf();
     if (e.target.id === 'btnVerifyRegister' && lastVerify && lastVerify.qRec) {
       const rec = lastVerify.qRec;
-      if (!samples.some(s => s.id === rec.id)) {
+      const isDup = samples.some(s => s.id === rec.id || (s.exifChecksum && rec.exifChecksum && s.exifChecksum === rec.exifChecksum));
+      if (isDup) {
+        toast('Duplicate: this image or its EXIF checksum already exists in catalog');
+        e.target.disabled = true;
+        e.target.textContent = 'Already in Catalog (Duplicate)';
+      } else {
         await DB.putMany([rec]);
         samples.push(rec);
         renderAll();
