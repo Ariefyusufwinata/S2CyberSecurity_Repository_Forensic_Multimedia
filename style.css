@@ -90,9 +90,13 @@ tr.click:hover td{background:var(--panel2)}
 .badge.bad{background:var(--bad);color:var(--bad-t)}
 .badge.navy{background:var(--navy-hi);color:#fff}
 
-.thumb{max-width:60px;max-height:50px;width:auto;height:auto;object-fit:contain;border-radius:6px;background:#050914;display:block}
-.thumb-detail-box{background:#050914;border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;align-items:center;justify-content:center;width:100%;height:300px;margin-bottom:8px;overflow:hidden}
-.thumb-lg{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;border-radius:8px;display:block}
+.thumb{width:56px;height:42px;object-fit:cover;border-radius:6px;background:#050914;display:block}
+.thumb.portrait{width:42px;height:56px;aspect-ratio:3/4}
+.thumb.landscape{width:56px;height:42px;aspect-ratio:4/3}
+.thumb-detail-box{background:#050914;border:1px solid var(--line);border-radius:12px;padding:8px;display:flex;align-items:center;justify-content:center;max-width:100%;margin-bottom:8px;overflow:hidden}
+.thumb-detail-box.portrait{width:255px;height:340px;aspect-ratio:3/4}
+.thumb-detail-box.landscape{width:400px;height:300px;aspect-ratio:4/3}
+.thumb-lg{width:100%;height:100%;object-fit:contain;border-radius:8px;display:block}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
 .kv{display:grid;grid-template-columns:140px 1fr;gap:5px 12px;font-size:13.5px}
 .kv div:nth-child(odd){color:var(--muted)}
@@ -121,10 +125,12 @@ details summary{cursor:pointer;line-height:1.8}
 .photo-card{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;cursor:pointer;display:flex;flex-direction:column;height:100%;transition:transform .15s,border-color .15s}
 .photo-card:hover{border-color:var(--accent);transform:translateY(-3px)}
 
-/* Kotak preview foto berukuran tetap (uniform) agar grid rapi dan sejajar */
-.photo-img-wrap{width:100%;height:180px;background:#050914;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;border-bottom:1px solid var(--line)}
+/* Kotak preview foto berukuran tetap (uniform) agar grid rapi, sementara gambar di dalamnya mengikuti orientasi Portrait (3:4) atau Landscape (4:3) */
+.photo-img-wrap{width:100%;height:185px;background:#050914;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;border-bottom:1px solid var(--line)}
 
-.photo-card img.gal-img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block;transition:transform .2s ease}
+.photo-card img.gal-img{max-width:100%;max-height:100%;display:block;transition:transform .2s ease}
+.photo-card.portrait img.gal-img{height:100%;width:auto;aspect-ratio:3/4;object-fit:cover}
+.photo-card.landscape img.gal-img{width:100%;height:100%;aspect-ratio:4/3;object-fit:cover}
 .photo-card:hover img.gal-img{transform:scale(1.03)}
 .photo-badge{position:absolute;top:8px;right:8px;background:#0d1428;border:1px solid var(--line);border-radius:6px;font-size:10px;font-weight:700;padding:2px 6px;color:var(--muted);letter-spacing:.3px;text-transform:uppercase;z-index:2}
 .photo-badge.portrait{color:var(--accent);border-color:var(--navy-hi);background:#131d3a}

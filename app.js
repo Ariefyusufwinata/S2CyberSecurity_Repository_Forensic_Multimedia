@@ -3,8 +3,8 @@
 
 const $ = (s, r = document) => r.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const ZZ = [0,1,8,16,9,2,3,10,17,24,32,25,18,11,4,5,12,19,26,33,40,48,41,34,27,20,13,6,7,14,21,28,35,42,49,56,57,50,43,36,29,22,15,23,30,37,44,51,58,59,52,45,38,31,39,46,53,60,61,54,47,55,62,63];
-const EDITORS = /photoshop|gimp|lightroom|paint\.net|pixelmator|affinity|snapseed|picsart|canva|corel|paintshop|capture one|darktable|rawtherapee|luminar|photoscape|fotor|facetune|vsco|adobe|acdsee|irfanview|imagemagick|photoworks|pixlr|sumopaint/i;
+/* Mathematical & forensic signature formulas (parseJpeg, Huffman, DQT distance, 576-vector, equivalence classes)
+ * are defined in huffman.js, loaded before app.js. */
 
 let samples = [];          // active repository
 let staged = [];           // latest ingestion screening results
@@ -34,72 +34,6 @@ const DB = {
   clear() { return this.tx('readwrite', s => s.clear()); }
 };
 
-/* ---------------- JPEG parser (DataView) ---------------- */
-function hash(str) {
-  let a = 0x811c9dc5, b = 0x01000193 ^ 0x9e3779b9;
-  for (let i = 0; i < str.length; i++) {
-    a = Math.imul(a ^ str.charCodeAt(i), 0x01000193) >>> 0;
-    b = Math.imul(b ^ str.charCodeAt(i), 0x85ebca6b) >>> 0;
-  }
-  return a.toString(16).padStart(8, '0') + b.toString(16).padStart(8, '0');
-}
-
-function parseJpeg(buf) {
-  const u8 = new Uint8Array(buf), dv = new DataView(buf), n = u8.length;
-  const out = { valid: false };
-  if (n < 4 || u8[0] !== 0xFF || u8[1] !== 0xD8 || u8[2] !== 0xFF) return out;
-  out.valid = true;
-  out.dqt = {}; out.dht = []; out.markers = []; out.sof = null; out.dri = 0;
-  let p = 2, dhtStr = '';
-  while (p < n - 1) {
-    if (u8[p] !== 0xFF) { p++; continue; }
-    while (p < n && u8[p] === 0xFF) p++;
-    const m = u8[p++];
-    if (m === 0x00 || m === 0x01 || (m >= 0xD0 && m <= 0xD8)) continue;
-    if (m === 0xD9) break;
-    if (p + 2 > n) break;
-    const len = dv.getUint16(p), start = p + 2, end = Math.min(p + len, n);
-    out.markers.push(m);
-    if (m === 0xDB) {
-      let q = start;
-      while (q < end) {
-        const pq = u8[q] >> 4, tq = u8[q] & 15; q++;
-        const size = pq ? 128 : 64;
-        if (q + size > end) break;
-        const nat = new Array(64);
-        for (let i = 0; i < 64; i++) nat[ZZ[i]] = pq ? dv.getUint16(q + i * 2) : u8[q + i];
-        out.dqt[tq] = nat; q += size;
-      }
-    } else if (m === 0xC4) {
-      let q = start;
-      while (q + 17 <= end) {
-        const cls = u8[q] >> 4, id = u8[q] & 15; q++;
-        const counts = Array.from(u8.subarray(q, q + 16)); q += 16;
-        const total = counts.reduce((a, b) => a + b, 0);
-        if (q + total > end) break;
-        dhtStr += cls + ':' + id + ':' + counts.join(',') + ':' + Array.from(u8.subarray(q, q + total)).join(',') + ';';
-        out.dht.push({ cls, id, total }); q += total;
-      }
-    } else if (m >= 0xC0 && m <= 0xCF && m !== 0xC4 && m !== 0xC8 && m !== 0xCC) {
-      const nc = u8[start + 5], comps = [];
-      for (let i = 0; i < nc; i++) { const o = start + 6 + i * 3; comps.push({ id: u8[o], h: u8[o + 1] >> 4, v: u8[o + 1] & 15, tq: u8[o + 2] }); }
-      out.sof = { type: m, precision: u8[start], height: dv.getUint16(start + 1), width: dv.getUint16(start + 3), comps };
-    } else if (m === 0xDD) out.dri = dv.getUint16(start);
-    else if (m === 0xDA) break;
-    p = end;
-  }
-  out.dhtHash = dhtStr ? hash(dhtStr) : '';
-  const ids = Object.keys(out.dqt).map(Number).sort((a, b) => a - b);
-  out.dqtKey = ids.length ? hash(ids.map(i => i + ':' + out.dqt[i].join(',')).join('|')) : '';
-  if (out.sof) {
-    const c = out.sof.comps, t = out.sof.type;
-    out.jpegType = t === 0xC0 ? 'Baseline' : t === 0xC1 ? 'Extended Sequential' : t === 0xC2 ? 'Progressive' : 'SOF' + (t - 0xC0);
-    const f = c[0] ? c[0].h + 'x' + c[0].v : '';
-    out.subsampling = c.length === 1 ? 'Grayscale' : f === '2x2' ? '4:2:0' : f === '2x1' ? '4:2:2' : f === '1x1' ? '4:4:4' : f === '1x2' ? '4:4:0' : c.map(x => x.h + 'x' + x.v).join(',');
-  }
-  return out;
-}
-
 /* ---------------- EXIF ---------------- */
 function readExif(buf) {
   const r = { tags: {}, thumb: '', xmpTool: '' };
@@ -126,18 +60,80 @@ function readExif(buf) {
   return r;
 }
 
-/* ---------------- Normalisasi perangkat ---------------- */
+/* ---------------- Normalisasi perangkat & resolusi kode model (SM-... / Firmware) ---------------- */
 const MAKE_ALIAS = { EASTMAN: 'KODAK', HEWLETT: 'HP', 'HEWLETT-PACKARD': 'HP', FUJI: 'FUJIFILM', LGE: 'LG', MINOLTA: 'KONICA', ASUSTEK: 'ASUS', 'ONEPLUS': 'ONEPLUS', 'SONY-ERICSSON': 'SONY', 'SONYERICSSON': 'SONY', 'RESEARCH': 'BLACKBERRY', 'BBK': 'VIVO', 'TECNO': 'TECNO', 'INFINIX': 'INFINIX' };
+const SAMSUNG_MODELS = {
+  'SM-N985F': 'Galaxy Note20 Ultra (SM-N985F)',
+  'SM-N986B': 'Galaxy Note20 Ultra 5G (SM-N986B)',
+  'SM-N986U': 'Galaxy Note20 Ultra 5G (SM-N986U)',
+  'SM-N986N': 'Galaxy Note20 Ultra 5G (SM-N986N)',
+  'SM-N980F': 'Galaxy Note20 (SM-N980F)',
+  'SM-N981B': 'Galaxy Note20 5G (SM-N981B)',
+  'SM-N975F': 'Galaxy Note10+ (SM-N975F)',
+  'SM-N970F': 'Galaxy Note10 (SM-N970F)',
+  'SM-S721B': 'Galaxy S24 FE',
+  'SM-S928B': 'Galaxy S24 Ultra (SM-S928B)',
+  'SM-S926B': 'Galaxy S24+ (SM-S926B)',
+  'SM-S921B': 'Galaxy S24 (SM-S921B)',
+  'SM-S918B': 'Galaxy S23 Ultra (SM-S918B)',
+  'SM-S916B': 'Galaxy S23+ (SM-S916B)',
+  'SM-S911B': 'Galaxy S23 (SM-S911B)',
+  'SM-S711B': 'Galaxy S23 FE (SM-S711B)',
+  'SM-S908E': 'Galaxy S22 Ultra (SM-S908E)',
+  'SM-S908B': 'Galaxy S22 Ultra (SM-S908B)',
+  'SM-S906E': 'Galaxy S22+ (SM-S906E)',
+  'SM-S901E': 'Galaxy S22 (SM-S901E)',
+  'SM-G998B': 'Galaxy S21 Ultra (SM-G998B)',
+  'SM-G996B': 'Galaxy S21+ (SM-G996B)',
+  'SM-G991B': 'Galaxy S21 (SM-G991B)',
+  'SM-G990E': 'Galaxy S21 FE (SM-G990E)',
+  'SM-G988B': 'Galaxy S20 Ultra (SM-G988B)',
+  'SM-G985F': 'Galaxy S20+ (SM-G985F)',
+  'SM-G980F': 'Galaxy S20 (SM-G980F)',
+  'SM-G780G': 'Galaxy S20 FE (SM-G780G)',
+  'SM-A556E': 'Galaxy A55 5G (SM-A556E)',
+  'SM-A546E': 'Galaxy A54 5G (SM-A546E)',
+  'SM-A536E': 'Galaxy A53 5G (SM-A536E)',
+  'SM-A528B': 'Galaxy A52s 5G (SM-A528B)',
+  'SM-A356E': 'Galaxy A35 5G (SM-A356E)',
+  'SM-A346E': 'Galaxy A34 5G (SM-A346E)'
+};
 function normMake(m) {
   m = (m || '').trim().replace(/\b(corporation|corp\.?|company|co\.?|inc\.?|ltd\.?|limited|electronics|imaging|digital)\b/gi, '').replace(/[,.]/g, '').trim();
   const w = (m.split(/\s+/)[0] || '').toUpperCase();
   return MAKE_ALIAS[w] || w;
 }
-function normModel(model, make) {
+function normModel(model, make, software = '') {
   let m = (model || '').trim();
-  const mk = normMake(make);
+  let mk = normMake(make);
   if (mk && m.toUpperCase().startsWith(mk)) m = m.slice(mk.length).trim();
+  // Extract Samsung SM-XXXX code from model or firmware string (e.g. N985FXXSIHYH3 -> SM-N985F)
+  const smMatch = m.toUpperCase().match(/^SM-([A-Z]\d{3}[A-Z0-9]*)/);
+  const fwMatch = String(software || '').toUpperCase().match(/\b([A-Z]\d{3}[A-Z]{1,2})(?:XX|DX|ZS|OY|UE|KS)[U|S][0-9A-Z]{3,}\b/);
+  const smCode = smMatch ? ('SM-' + smMatch[1].replace(/\/DS$/i, '')) : (fwMatch ? 'SM-' + fwMatch[1] : '');
+  if (smCode) {
+    if (SAMSUNG_MODELS[smCode]) return SAMSUNG_MODELS[smCode];
+    if (!m) return 'Galaxy (' + smCode + ')';
+    if (/^SM-/i.test(m)) return 'Galaxy ' + smCode;
+  }
   return m;
+}
+function resolveDeviceMeta(rawMake, rawModel, software = '') {
+  let make = normMake(rawMake);
+  let model = normModel(rawModel, rawMake, software);
+  if ((!make || !model) && software) {
+    const fw = String(software).toUpperCase().match(/\b([A-Z]\d{3}[A-Z]{1,2})(?:XX|DX|ZS|OY|UE|KS)[U|S][0-9A-Z]{3,}\b/);
+    if (fw) {
+      if (!make) make = 'SAMSUNG';
+      if (!model) model = normModel('SM-' + fw[1], 'SAMSUNG', software);
+    }
+    const sonyFw = String(software).match(/\b(ZV-[A-Z0-9]+|ILCE-[A-Z0-9]+|DSC-[A-Z0-9]+)\s+v\d/i);
+    if (sonyFw) {
+      if (!make) make = 'SONY';
+      if (!model) model = sonyFw[1].toUpperCase();
+    }
+  }
+  return { make, model, rawModel: (rawModel || '').trim(), device: make && model ? titleMake(make) + ' ' + model : '' };
 }
 const titleMake = m => m.charAt(0) + m.slice(1).toLowerCase();
 
@@ -154,22 +150,25 @@ const ORIENTATION_MAP = {
 };
 
 function parseOrientation(val, w = 0, h = 0) {
-  if (!val) {
-    if (h > w && w > 0) return { num: 1, classic: 'Top-Left', exifTool: 'Portrait (sensor)', category: 'Portrait', label: 'Portrait', deg: 0 };
-    return ORIENTATION_MAP[1];
-  }
-  const s = String(val).toLowerCase().trim();
+  const s = String(val || '').toLowerCase().trim();
   const num = parseInt(s, 10);
-  if (!isNaN(num) && ORIENTATION_MAP[num]) return ORIENTATION_MAP[num];
-  if (s.includes('right-top') || s.includes('rotate 90')) return ORIENTATION_MAP[6];
-  if (s.includes('left-bottom') || s.includes('rotate 270')) return ORIENTATION_MAP[8];
-  if (s.includes('bottom-right') || s.includes('rotate 180')) return ORIENTATION_MAP[3];
-  if (s.includes('top-right') || s.includes('mirror horizontal')) return ORIENTATION_MAP[2];
-  if (s.includes('bottom-left') || s.includes('mirror vertical')) return ORIENTATION_MAP[4];
-  if (s.includes('left-top')) return ORIENTATION_MAP[5];
-  if (s.includes('right-bottom')) return ORIENTATION_MAP[7];
-  if (s.includes('top-left') || s.includes('horizontal') || s.includes('normal')) return ORIENTATION_MAP[1];
-  return ORIENTATION_MAP[1];
+  let base = (!isNaN(num) && ORIENTATION_MAP[num]) ? ORIENTATION_MAP[num] : null;
+  if (!base) {
+    if (s.includes('right-top') || s.includes('rotate 90')) base = ORIENTATION_MAP[6];
+    else if (s.includes('left-bottom') || s.includes('rotate 270')) base = ORIENTATION_MAP[8];
+    else if (s.includes('bottom-right') || s.includes('rotate 180')) base = ORIENTATION_MAP[3];
+    else if (s.includes('top-right') || s.includes('mirror horizontal')) base = ORIENTATION_MAP[2];
+    else if (s.includes('bottom-left') || s.includes('mirror vertical')) base = ORIENTATION_MAP[4];
+    else if (s.includes('left-top')) base = ORIENTATION_MAP[5];
+    else if (s.includes('right-bottom')) base = ORIENTATION_MAP[7];
+    else if (s.includes('top-left') || s.includes('horizontal') || s.includes('normal')) base = ORIENTATION_MAP[1];
+  }
+  if (!base) base = ORIENTATION_MAP[1];
+  if (base.deg === 0 && h > w && w > 0) {
+    return { ...base, exifTool: 'Portrait (vertical sensor)', isHorizontal: false, category: 'Portrait', label: 'Portrait' };
+  }
+  const isHorizontal = base.exifTool.toLowerCase().startsWith('horizontal') || base.deg === 180 || base.num === 4;
+  return { ...base, isHorizontal, category: isHorizontal ? 'Landscape' : 'Portrait', label: isHorizontal ? 'Landscape' : 'Portrait' };
 }
 
 async function rotateDataUrl(dataUrl, deg) {
@@ -262,11 +261,25 @@ function thumbOf(s) {
   return placeholder(s.format || 'JPEG');
 }
 
+function isHorizontalExifTool(s) {
+  if (!s) return true;
+  if (s.orientationExifTool) {
+    const et = String(s.orientationExifTool).toLowerCase();
+    const horiz = et.startsWith('horizontal') || et === 'mirror horizontal' || et === 'rotate 180' || et === 'mirror vertical';
+    if (!horiz) return false;
+    if (s.height > s.width && (!s.orientationDeg || s.orientationDeg === 0)) return false;
+    return true;
+  }
+  return !(s.orientationCategory ? s.orientationCategory === 'Portrait' : (s.isPortrait || s.orientationDeg === 90 || s.orientationDeg === 270 || (s.height > s.width && !s.orientationDeg)));
+}
+const isSamplePortrait = s => !isHorizontalExifTool(s);
+
 function imgTag(s, cls, extra = '') {
   const primary = thumbOf(s);
   const directPath = (s && s.file && (s.file.startsWith('images/') || s.file.startsWith('./images/'))) ? s.file : '';
   const altFallback = directPath && primary !== directPath ? directPath : placeholder(s && s.format);
-  return `<img class="${cls}" ${extra} src="${primary}" onerror="if(this.src!=='${altFallback}'){this.src='${altFallback}'}else{this.onerror=null;this.src='${placeholder(s && s.format)}'}">`;
+  const oriCls = isSamplePortrait(s) ? 'portrait' : 'landscape';
+  return `<img class="${cls} ${oriCls}" ${extra} src="${primary}" onerror="if(this.src!=='${altFallback}'){this.src='${altFallback}'}else{this.onerror=null;this.src='${placeholder(s && s.format)}'}">`;
 }
 
 /* ---------------- File Analysis ---------------- */
@@ -279,20 +292,22 @@ async function analyze(name, buf, size) {
   const rawW = j.sof ? j.sof.width : 0, rawH = j.sof ? j.sof.height : 0;
   const ori = (ex.params && (ex.params['Orientation'] || ex.params['Orientasi'])) || '';
   const oInfo = parseOrientation(ori, rawW, rawH);
-  if (!ex.thumb) {
-    ex.thumb = await makePreview(buf);
-    if (ex.thumb) ex.thumbSrc = 'GENERATED_COLOR';
-  } else if (oInfo.deg !== 0) {
+  const preview = await makePreview(buf);
+  if (preview) {
+    ex.thumb = preview;
+    ex.thumbSrc = 'GENERATED_COLOR_ROTATED';
+  } else if (ex.thumb && oInfo.deg !== 0) {
     ex.thumb = await rotateDataUrl(ex.thumb, oInfo.deg);
   }
   const isPortrait = oInfo.category === 'Portrait';
   const displayW = isPortrait && rawW > rawH ? rawH : rawW;
   const displayH = isPortrait && rawW > rawH ? rawW : rawH;
   const tool = [ex.software, ex.xmpTool].filter(Boolean).join(' / ');
-  const make = normMake(ex.make), model = normModel(ex.model, ex.make);
+  const { make, model, rawModel, device } = resolveDeviceMeta(ex.make, ex.model, tool);
+  const es = exifStruct(buf), th = thumbSigOf(es, buf);
   item.rec = {
     id: name + '|' + size + '|' + j.dqtKey, file: name, size,
-    format: 'JPEG', make, model, device: make && model ? titleMake(make) + ' ' + model : '',
+    format: 'JPEG', make, model, rawModel: rawModel || model, device,
     software: tool, width: rawW, height: rawH,
     displayWidth: displayW, displayHeight: displayH, displayDim: displayW + ' × ' + displayH,
     orientationNum: oInfo.num, orientationClassic: oInfo.classic,
@@ -300,11 +315,16 @@ async function analyze(name, buf, size) {
     orientationLabel: oInfo.label, orientationDeg: oInfo.deg, isPortrait,
     dqtKey: j.dqtKey, dqt: j.dqt, jpegType: j.jpegType || '', subsampling: j.subsampling || '',
     precision: j.sof ? j.sof.precision : 0, dht: j.dht, dhtHash: j.dhtHash, dri: j.dri,
-    markers: j.markers.map(m => m.toString(16).toUpperCase()), exif: ex.params || {}, thumb: ex.thumb, thumbSrc: ex.thumbSrc || ''
+    markers: j.markers.map(m => m.toString(16).toUpperCase()), exif: ex.params || {}, thumb: ex.thumb, thumbSrc: ex.thumbSrc || '',
+    huff: j.huff, exifStruct: es.counts, thumbSig: th
   };
+  item.rec.fullKey = fullKeyOf(item.rec);
   item.edited = EDITORS.test(tool);
+  const traces = editTraces(j, es);
   if (!j.dqtKey) { item.status = 'rejected'; item.reason = 'No DQT tables found'; }
   else if (item.edited) { item.status = 'rejected'; item.reason = 'Edited with third-party software: ' + tool; }
+  else if (traces.length) { item.status = 'rejected'; item.edited = true; item.reason = 'Edit traces without a Software tag: ' + traces.join('; '); }
+  else if (isFlickrResize(rawW, rawH)) { item.status = 'rejected'; item.reason = 'Resized derivative (long side ' + Math.max(rawW, rawH) + ' px is a Flickr resize size)'; }
   else if (!item.rec.device) { item.status = 'rejected'; item.reason = 'EXIF Make/Model unavailable'; }
   else item.status = 'accepted';
   return item;
@@ -342,6 +362,27 @@ async function ingest(files) {
       await new Promise(r => setTimeout(r));
     }
   }
+  /* Outlier screening against the catalog (needs the existing repository, so it runs after per-file analysis) */
+  staged.forEach(it => {
+    if (it.status !== 'accepted') return;
+    const why = outlierCheck(it.rec);
+    if (why) { it.status = 'rejected'; it.outlier = true; it.reason = why; }
+  });
+  /* Automatically save accepted samples into the active repository so they immediately appear in Catalog, Gallery, Classification & Verification */
+  const ids = new Set((samples || []).map(s => s.id));
+  const fresh = [];
+  staged.forEach(s => {
+    if (s.status === 'accepted' && s.rec && !ids.has(s.rec.id)) {
+      ids.add(s.rec.id);
+      fresh.push(s.rec);
+    }
+  });
+  if (fresh.length) {
+    await DB.putMany(fresh);
+    samples = samples.concat(fresh);
+    renderAll();
+    toast(`Analyzed & saved ${fresh.length} accepted sample(s) to repository`);
+  }
   renderIngest();
 }
 
@@ -349,78 +390,32 @@ function renderIngest() {
   const acc = staged.filter(s => s.status === 'accepted').length;
   const inval = staged.filter(s => s.valid === false).length;
   const ed = staged.filter(s => s.edited).length;
-  const nometa = staged.filter(s => s.valid && !s.edited && s.status === 'rejected').length;
-  $('#ingestTiles').innerHTML = [['Total', staged.length], ['Accepted', acc], ['Invalid JPEG', inval], ['Software Edited', ed], ['Missing Metadata/DQT', nometa]]
+  const reasonIs = (s, p) => s.status === 'rejected' && (s.reason || '').startsWith(p);
+  const resized = staged.filter(s => reasonIs(s, 'Resized')).length;
+  const outliers = staged.filter(s => s.outlier).length;
+  const nometa = staged.filter(s => s.valid && !s.edited && s.status === 'rejected').length - resized - outliers;
+  $('#ingestTiles').innerHTML = [['Total', staged.length], ['Accepted', acc], ['Invalid JPEG', inval], ['Edited (tag or traces)', ed], ['Resized (Flickr)', resized], ['Signature Outlier', outliers], ['Missing Metadata/DQT', nometa]]
     .map(([l, v]) => `<div class="tile"><b>${v}</b><span>${l}</span></div>`).join('');
   $('#btnAddAccepted').disabled = !acc;
   const f = $('#filterStatus').value;
-  const rows = staged.filter(s => f === 'all' || s.status === f);
-  $('#ingestBody').innerHTML = rows.length ? rows.map(s => `<tr>
+  const rows = staged.map((s, idx) => ({ s, idx })).filter(({ s }) => f === 'all' || s.status === f);
+  $('#ingestBody').innerHTML = rows.length ? rows.map(({ s, idx }) => `<tr class="${s.rec && s.rec.dqt ? 'click' : ''}" data-ingest-idx="${idx}" title="Click to view full forensic analysis">
     <td>${s.rec ? imgTag(s.rec, 'thumb') : ''}</td>
     <td class="small">${esc(s.name)}</td>
-    <td>${esc(s.rec ? s.rec.device : '')}</td>
-    <td class="small">${esc(s.rec ? s.rec.software : '')}</td>
-    <td>${s.status === 'accepted' ? '<span class="badge ok">Accepted</span>' : `<span class="badge bad">Rejected</span> <span class="small muted">${esc(s.reason)}</span>`}</td></tr>`).join('')
+    <td><b>${esc(s.rec ? s.rec.device : '-')}</b>${s.rec && s.rec.rawModel && s.rec.rawModel !== s.rec.model ? `<div class="small muted">EXIF Model: ${esc(s.rec.rawModel)}</div>` : ''}</td>
+    <td class="small mono">${esc(s.rec ? s.rec.software : '')}</td>
+    <td>${s.status === 'accepted' ? '<span class="badge ok">Accepted &amp; Saved</span> <span class="small muted">Click row for details</span>' : `<span class="badge bad">Rejected</span> <span class="small muted">${esc(s.reason)}</span>`}</td></tr>`).join('')
     : '<tr><td colspan="5" class="muted">No data available.</td></tr>';
 }
 
 /* ---------------- Catalog & Classification ---------------- */
-/* Inter-signature distance: mean absolute difference across all elements in DQT tables (quantization step units). */
-const NEAR = 1.0;   // <= NEAR : treated as same signature variant (e.g. Samsung adaptive quantization)
-const CLOSE = 2.0;  // <= CLOSE : similar but not identical
-function dqtDist(a, b) {
-  let t = 0, n = 0;
-  for (const id of Object.keys(a)) {
-    if (!b[id]) return Infinity;
-    for (let i = 0; i < 64; i++) { t += Math.abs(a[id][i] - b[id][i]); n++; }
-  }
-  return n ? t / n : Infinity;
+function eqHtml() {
+  const rows = EQ_SETS.map(([l, f]) => ({ l, st: eqStats(f) }));
+  const cs = configStats();
+  return `<div class="scroll"><table><thead><tr><th>Feature set</th><th>Classes</th><th>n=1</th><th>n=2</th><th>n=3</th><th>n=4</th><th>n ≥ 5</th><th>Median n</th><th>Max n</th><th>Devices uniquely identified</th></tr></thead><tbody>` +
+    rows.map(({ l, st }) => `<tr><td>${l}</td><td>${st.classes}</td>${st.dist.map(x => `<td>${x}</td>`).join('')}<td>${st.median}</td><td>${st.max}</td><td>${st.uniq} / ${st.devs} (${st.devs ? (100 * st.uniq / st.devs).toFixed(1) : 0}%)</td></tr>`).join('') +
+    `</tbody></table></div><p class="small muted">Class size n = number of devices (Make + Model) sharing the same signature. Configurations (device + full signature) with at least ${MIN_CONFIG_SAMPLES} samples, as required by the reference paper: ${cs.ok} of ${cs.total}.</p>`;
 }
-const simPct = d => d === Infinity ? 0 : 100 / (1 + d);
-
-/* Estimate IJG quality factor from luminance table (Annex K) */
-const STD_LUM = [16,11,10,16,24,40,51,61,12,12,14,19,26,58,60,55,14,13,16,24,40,57,69,56,14,17,22,29,51,87,80,62,18,22,37,56,68,109,103,77,24,35,55,64,81,104,113,92,49,64,78,87,103,121,120,101,72,92,95,98,112,100,103,99];
-function estimateQuality(dqt) {
-  const t = dqt && dqt[0]; if (!t) return null;
-  let best = null;
-  for (let q = 1; q <= 100; q++) {
-    const sc = q < 50 ? 5000 / q : 200 - 2 * q; let err = 0;
-    for (let i = 0; i < 64; i++) err += Math.abs(Math.min(255, Math.max(1, Math.floor((STD_LUM[i] * sc + 50) / 100))) - t[i]);
-    if (!best || err < best.err) best = { q, err: err / 64 };
-  }
-  return best;
-}
-const qualityText = dqt => { const e = estimateQuality(dqt); return e ? `≈ Q${e.q} (error ${e.err.toFixed(2)}${e.err > 1 ? ', non-standard table' : ''})` : '-'; };
-
-/* Signatures are grouped into families: variants with distance <= NEAR are merged (single-linkage). */
-function groupSignatures() {
-  const exact = new Map();
-  samples.forEach(s => {
-    if (!exact.has(s.dqtKey)) exact.set(s.dqtKey, { key: s.dqtKey, dqt: s.dqt, samples: [] });
-    exact.get(s.dqtKey).samples.push(s);
-  });
-  const ex = [...exact.values()].sort((a, b) => b.samples.length - a.samples.length);
-  const parent = ex.map((_, i) => i);
-  const find = i => parent[i] === i ? i : (parent[i] = find(parent[i]));
-  for (let i = 0; i < ex.length; i++) for (let j = i + 1; j < ex.length; j++)
-    if (find(i) !== find(j) && dqtDist(ex[i].dqt, ex[j].dqt) <= NEAR) parent[find(j)] = find(i);
-  const map = new Map(); map.byKey = new Map(); map.exact = ex;
-  ex.forEach((e, i) => {
-    const r = find(i);
-    if (!map.has(ex[r].key)) map.set(ex[r].key, { key: ex[r].key, dqt: ex[r].dqt, devices: new Map(), samples: [], variants: [] });
-    const g = map.get(ex[r].key);
-    g.variants.push(e.key); g.samples.push(...e.samples);
-    e.samples.forEach(s => { if (!g.devices.has(s.device)) g.devices.set(s.device, s.make); });
-    map.byKey.set(e.key, g);
-  });
-  map.forEach(g => {
-    const makes = new Set(g.devices.values()), n = g.devices.size;
-    g.cat = n === 1 ? 'unique' : (n === 2 && makes.size === 1) ? 'same' : 'multi';
-  });
-  return map;
-}
-const CAT_LABEL = { unique: 'Unique', same: 'Shared (Same Manufacture)', multi: 'Shared (Multi-Device)' };
-const CAT_CLASS = { unique: 'ok', same: 'warn', multi: 'bad' };
 
 function dqtHtml(dqt) {
   return Object.keys(dqt).sort().map(id => {
@@ -476,9 +471,9 @@ function renderGallery() {
     if (devF !== 'all' && s.device !== devF) return false;
     const folder = s.file.split('/')[1] || 'root';
     if (folF !== 'all' && folder !== folF) return false;
-    if (oriF !== 'all' && (s.orientationCategory || (s.isPortrait ? 'Portrait' : 'Landscape')) !== oriF) return false;
+    if (oriF !== 'all' && (isSamplePortrait(s) ? 'Portrait' : 'Landscape') !== oriF) return false;
     if (q) {
-      const hay = (s.file + ' ' + s.device + ' ' + s.dqtKey + ' ' + (s.software || '') + ' ' + (s.orientationLabel || '')).toLowerCase();
+      const hay = (s.file + ' ' + s.device + ' ' + s.dqtKey + ' ' + (s.software || '') + ' ' + (s.orientationLabel || '') + ' ' + (s.orientationExifTool || '')).toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -495,9 +490,10 @@ function renderGallery() {
     const filename = s.file.split('/').pop();
     const folder = s.file.split('/')[1] || '';
     const imgHtml = imgTag(s, 'gal-img', 'loading="lazy"');
-    const isPortrait = s.orientationCategory ? s.orientationCategory === 'Portrait' : (s.isPortrait || (s.orientationDeg === 90 || s.orientationDeg === 270) || (s.height > s.width && !s.orientationDeg));
+    const isPortrait = isSamplePortrait(s);
     const oriText = isPortrait ? 'Portrait' : 'Landscape';
-    const oriBadge = `<span class="${isPortrait ? 'photo-badge portrait' : 'photo-badge'}">${oriText}</span>`;
+    const exifDesc = s.orientationExifTool || (isPortrait ? 'Rotate 90 CW' : 'Horizontal (normal)');
+    const oriBadge = `<span class="${isPortrait ? 'photo-badge portrait' : 'photo-badge'}" title="ExifTool: ${esc(exifDesc)}">${oriText}</span>`;
     const dimText = s.displayDim || (isPortrait && s.width > s.height ? `${s.height}×${s.width}` : `${s.width}×${s.height}`);
     return `<div class="photo-card ${isPortrait ? 'portrait' : 'landscape'}" data-gal-id="${esc(s.id)}">
       <div class="photo-img-wrap">
@@ -507,8 +503,8 @@ function renderGallery() {
       <div class="photo-info">
         <div class="photo-name" title="${esc(filename)}">${esc(filename)}</div>
         <div class="photo-dev">${esc(s.device)}</div>
-        <div class="small muted">${dimText} · ${esc(folder)}</div>
-        <div class="small mono muted" style="overflow:hidden;text-overflow:ellipsis" title="DQT Key: ${s.dqtKey}">${s.dqtKey}</div>
+        <div class="small muted">${dimText} · ${esc(exifDesc)}</div>
+        <div class="small muted">${esc(folder)} · <span class="mono" title="DQT Key: ${s.dqtKey}">${s.dqtKey}</span></div>
       </div>
     </div>`;
   }).join('');
@@ -553,25 +549,39 @@ function showDevice(dev) {
 
 function sampleDetailHtml(s) {
   const kv = o => '<div class="kv">' + Object.entries(o).map(([k, v]) => `<div>${esc(k)}</div><div>${esc(v)}</div>`).join('') + '</div>';
-  const isPortrait = s.orientationCategory ? s.orientationCategory === 'Portrait' : (s.isPortrait || (s.orientationDeg === 90 || s.orientationDeg === 270) || (s.height > s.width && !s.orientationDeg));
+  const isPortrait = isSamplePortrait(s);
+  const isHoriz = !isPortrait;
   const oriLabel = isPortrait ? 'Portrait' : 'Landscape';
+  const exifDesc = s.orientationExifTool || (isPortrait ? 'Rotate 90 CW' : 'Horizontal (normal)');
   const displayDim = s.displayDim || (isPortrait && s.width > s.height ? `${s.height} × ${s.width} (Portrait)` : `${s.width} × ${s.height} (Landscape)`);
+  const th = s.thumbSig || {}, hRows = huffRows(s.huff);
   return `<h3>${esc(s.file)}</h3><div class="grid2"><div>
     <div class="thumb-detail-box ${isPortrait ? 'portrait' : 'landscape'}">${imgTag(s, 'thumb-lg')}</div>
-    <p class="small muted">${!s.thumb ? 'No thumbnail — format placeholder ' + (s.format || 'JPEG') : s.thumbSrc === 'GENERATED' || s.thumbSrc === 'GENERATED_COLOR_ROTATED' ? 'Full-color preview from source image' : 'Embedded thumbnail (' + (s.thumbSrc || 'EXIF') + ')'} · <b>${oriLabel}</b></p>
+    <p class="small muted">${!s.thumb ? 'No thumbnail — format placeholder ' + (s.format || 'JPEG') : s.thumbSrc === 'GENERATED' || s.thumbSrc === 'GENERATED_COLOR_ROTATED' ? 'Full-color preview from source image' : 'Embedded thumbnail (' + (s.thumbSrc || 'EXIF') + ')'} · <b>${oriLabel}</b> (${esc(exifDesc)})</p>
     <h3>Camera Orientation (EXIF / TIFF)</h3>
     ${kv({
-      'Display Category': isPortrait ? 'Portrait' : 'Landscape',
-      'Orientation Description': s.orientationLabel || oriLabel,
+      'ExifTool Description': exifDesc,
+      'Is Horizontal (ExifTool)': isHoriz ? 'Yes — Horizontal / Landscape' : 'No (' + exifDesc + ') — Portrait',
+      'Display Category': oriLabel,
       'EXIF Tag Value': s.orientationNum ? String(s.orientationNum) : '1 (Default)',
       'TIFF/EXIF Classic Name': s.orientationClassic || 'Top-Left',
-      'ExifTool Description': s.orientationExifTool || 'Horizontal (normal)',
       'Display Dimensions': displayDim,
       'Native Sensor Dimensions': `${s.width} × ${s.height}`
     })}
-    <h3>Camera Metadata</h3>${kv({ Make: s.make, Model: s.model, Software: s.software || '-', ...s.exif })}</div>
-    <div><h3>Compression Structure</h3>${kv({ Type: s.jpegType, Subsampling: s.subsampling, Precision: s.precision + ' bits', 'DHT Tables': s.dht.length + ' (hash ' + (s.dhtHash || '-') + ')', 'Restart Interval': s.dri, Markers: s.markers.join(' '), 'DQT Signature': s.dqtKey, 'Estimated Quality': qualityText(s.dqt) })}</div></div>
-    <h3>8×8 DQT Quantization Matrix</h3>${dqtHtml(s.dqt)}`;
+    <h3>Camera Metadata</h3>${kv({ Make: s.make, 'Resolved Model': s.model, ...(s.rawModel && s.rawModel !== s.model ? { 'EXIF Model Code': s.rawModel } : {}), Software: s.software || '-', ...s.exif })}</div>
+    <div><h3>Compression &amp; 576-Feature Signature</h3>${kv({
+      Type: s.jpegType, Subsampling: s.subsampling, Precision: s.precision + ' bits',
+      'DHT Tables': s.dht.length + ' (hash ' + (s.dhtHash || '-') + ')',
+      'Restart Interval': s.dri, Markers: s.markers.join(' '),
+      'DQT Signature (192)': s.dqtKey,
+      'Full Signature (576)': fullKeyOf(s),
+      'Embedded Thumbnail (284)': th.present ? `${th.w} × ${th.h}` : 'absent (zeros)',
+      'EXIF IFD Counts (8)': (s.exifStruct || []).join(', ') || '-',
+      'Estimated Quality': qualityText(s.dqt)
+    })}</div></div>
+    <h3>8×8 DQT Quantization Matrix</h3>${dqtHtml(s.dqt)}
+    <h3>Huffman Tables (DHT): BITS[1..15] Code-Length Counts (90 features)</h3>
+    <div class="scroll"><table><thead><tr><th>Table</th><th>BITS[1..15]</th><th>Symbols</th><th>Kraft Sum</th><th>Kraft Valid</th></tr></thead><tbody>${hRows.map(r => `<tr><td>${r.label}</td><td class="mono small">${r.counts.join(' ')}</td><td>${r.total}</td><td>${r.kraftSum.toFixed(4)}</td><td>${r.valid ? 'yes' : 'NO'}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
 function renderClassify(groups) {
@@ -589,6 +599,7 @@ function renderClassify(groups) {
   };
   for (const [c, id] of [['unique', '#clsUnique'], ['same', '#clsSame'], ['multi', '#clsMulti']])
     $(id).innerHTML = list[c].map(card).join('') || '<span class="muted">None.</span>';
+  if ($('#eqStats')) $('#eqStats').innerHTML = eqHtml();
 }
 
 /* ---------------- Verification ---------------- */
@@ -598,12 +609,56 @@ async function verify(file) {
   const box = $('#verifyResult');
   if (!j.valid) { const fmt = detectFormat(new Uint8Array(buf, 0, Math.min(16, buf.byteLength))); box.innerHTML = `<div class="alert bad">Not a JPEG file (detected format: ${esc(fmt)}).<small>DQT signatures are unique to JPEG; this file cannot be verified.</small></div><div class="card">${imgTag({ format: fmt }, 'thumb-lg')}</div>`; lastVerify = null; return; }
   const ex = readExif(buf);
-  if (!ex.thumb) ex.thumb = await makePreview(buf);
-  const make = normMake(ex.make), model = normModel(ex.model, ex.make);
-  const claimed = make && model ? titleMake(make) + ' ' + model : '';
+  const rawW = j.sof ? j.sof.width : 0, rawH = j.sof ? j.sof.height : 0;
+  const ori = (ex.params && (ex.params['Orientation'] || ex.params['Orientasi'])) || '';
+  const oInfo = parseOrientation(ori, rawW, rawH);
+  const isPortrait = oInfo.category === 'Portrait';
+  const dispW = isPortrait && rawW > rawH ? rawH : rawW, dispH = isPortrait && rawW > rawH ? rawW : rawH;
+  const preview = await makePreview(buf);
+  if (preview) ex.thumb = preview;
+  else if (ex.thumb && oInfo.deg !== 0) ex.thumb = await rotateDataUrl(ex.thumb, oInfo.deg);
   const tool = [ex.software, ex.xmpTool].filter(Boolean).join(' / ');
+  const { make, model, rawModel, device: claimed } = resolveDeviceMeta(ex.make, ex.model, tool);
   const edited = EDITORS.test(tool);
   const groups = groupSignatures();
+  /* Full 576-feature signature of the query image, compared component by component with every catalog sample */
+  const es = exifStruct(buf), th = thumbSigOf(es, buf);
+  const qRec = {
+    id: file.name + '|' + (file.size || buf.byteLength) + '|' + j.dqtKey,
+    file: file.name, size: file.size || buf.byteLength,
+    format: 'JPEG', make, model, rawModel: rawModel || model, device: claimed,
+    software: tool, width: rawW, height: rawH,
+    displayWidth: dispW, displayHeight: dispH, displayDim: dispW + ' × ' + dispH,
+    orientationNum: oInfo.num, orientationClassic: oInfo.classic,
+    orientationExifTool: oInfo.exifTool, orientationCategory: oInfo.category,
+    orientationLabel: oInfo.label, orientationDeg: oInfo.deg, isPortrait,
+    dqtKey: j.dqtKey, dqt: j.dqt, jpegType: j.jpegType || '', subsampling: j.subsampling || '',
+    precision: j.sof ? j.sof.precision : 0, dht: j.dht, dhtHash: j.dhtHash, dri: j.dri,
+    markers: j.markers.map(m => m.toString(16).toUpperCase()), exif: ex.params || {},
+    thumb: ex.thumb, thumbSrc: ex.thumbSrc || 'GENERATED_COLOR_ROTATED',
+    huff: j.huff, exifStruct: es.counts, thumbSig: th
+  };
+  qRec.fullKey = fullKeyOf(qRec);
+  const qParts = sigParts(qRec), qFull = qRec.fullKey;
+  const catSigs = samples.map(s => ({ s, parts: sigParts(s), full: fullKeyOf(s) }));
+  const compRows = qParts.map((p, i) => {
+    const k = p.vals.join(','), devs = new Set(), makes = new Set();
+    catSigs.forEach(c => { if (c.parts[i].vals.join(',') === k) { devs.add(c.s.device); makes.add(c.s.make); } });
+    return { label: p.label, n: p.vals.length, devs: [...devs].sort(), makes: [...makes] };
+  });
+  const fullDevs = [...new Set(catSigs.filter(c => c.full === qFull).map(c => c.s.device))].sort();
+  const claimedKnown = !!(claimed && samples.some(s => s.device === claimed || (rawModel && s.rawModel === rawModel)));
+  const dimKey = Math.min(qRec.width, qRec.height) + 'x' + Math.max(qRec.width, qRec.height);
+  const natSet = new Set(samples.filter(s => s.device === claimed).map(s => Math.min(s.width, s.height) + 'x' + Math.max(s.width, s.height)));
+  const nativeText = isFlickrResize(qRec.width, qRec.height) ? 'Flickr resize size (likely re-compressed)' : !claimed ? '-' : !natSet.size ? `New model (${claimed} not yet in catalog; sensor ${qRec.width}×${qRec.height})` : natSet.has(dimKey) ? 'Seen in catalog for claimed device' : 'NOT seen in catalog for claimed device (possible resize / converter)';
+  const ijg = ijgMatch(j.dqt), traces = editTraces(j, es);
+  const hRows = huffRows(j.huff);
+  let fullLevel, fullText;
+  if (!samples.length) { fullLevel = 'info'; fullText = 'Catalog is empty.'; }
+  else if (!fullDevs.length) { fullLevel = 'info'; fullText = claimed && !claimedKnown ? `Model ${claimed} is not yet registered in the catalog. Click "Register ${claimed} in Catalog" below to add its 576-feature signature.` : 'No catalog sample shares the complete 576-feature signature (resolution and thumbnail are part of the signature, so a new resolution yields no full match; see the component table).'; }
+  else if (claimed && !fullDevs.includes(claimed)) { fullLevel = 'bad'; fullText = `Full signature matches ${fullDevs.join('; ')}, but EXIF claims ${claimed}.`; }
+  else if (claimed) { fullLevel = fullDevs.length === 1 ? 'ok' : 'warn'; fullText = fullDevs.length === 1 ? `Full signature matches only ${claimed}.` : `Full signature matches ${claimed} but is shared with: ${fullDevs.filter(d => d !== claimed).join('; ')}.`; }
+  else { fullLevel = 'info'; fullText = `Full signature matches: ${fullDevs.join('; ')}.`; }
   /* Matching logic: exact hash -> similar variant (dist <= NEAR) -> nearest candidate */
   const cands = new Map(); let nearestKey = null, nearestD = Infinity;
   if (j.dqtKey) groups.exact.forEach(e => {
@@ -616,7 +671,6 @@ async function verify(file) {
   if (!g && nearestKey && nearestD <= NEAR) { g = groups.byKey.get(nearestKey); matchType = 'near'; }
   const nearNote = matchType === 'near' ? ` (similar variant, distance ${nearestD.toFixed(2)})` : '';
   const matches = g ? [...g.devices.entries()] : [];
-  const claimedKnown = claimed && samples.some(s => s.device === claimed);
   let level, title, detail;
   if (!j.dqtKey) { level = 'warn'; title = 'No DQT tables found'; detail = 'Compression signature could not be extracted.'; }
   else if (!samples.length) { level = 'info'; title = 'Catalog is empty'; detail = 'Load signatures.json / Import JSON or ingest sample images first.'; }
@@ -626,26 +680,50 @@ async function verify(file) {
       const dc = cands.get(claimed).d;
       if (dc <= CLOSE) { level = 'warn'; title = 'SIMILAR but not identical to claimed device signature'; detail = `EXIF claims ${claimed}; nearest DQT distance is ${dc.toFixed(2)}. Possible new quantization variant or reprocessed image. Closest candidate: ${near}.`; }
       else { level = 'bad'; title = 'MISMATCH — signature does not match EXIF claim'; detail = `EXIF claims ${claimed}, which exists in the catalog, but its distance is ${dc.toFixed(2)} from this image signature. Closest candidate: ${near}.`; }
-    } else { level = 'info'; title = 'Signature not found in catalog'; detail = `Definitive identification unavailable. Closest candidate: ${near}.` + (claimed ? ` EXIF claim: ${claimed} (not yet in catalog).` : ''); }
+    } else if (claimed && ranked[0] && ranked[0][1].make === make && ranked[0][1].d <= CLOSE) {
+      level = 'ok';
+      title = `AUTHENTIC ${make} ENCODER PROFILE — ${claimed} (New Model)`;
+      detail = `EXIF model ${claimed}${rawModel && rawModel !== model ? ' [' + rawModel + ']' : ''} (Firmware: ${tool || '-'}) is a valid ${titleMake(make)} device not yet in the catalog. Its DQT profile closely matches ${ranked[0][0]} (distance ${ranked[0][1].d.toFixed(2)}, ${simPct(ranked[0][1].d).toFixed(1)}% similarity).`;
+    } else { level = 'info'; title = `New Device Signature — ${claimed || 'Unknown Model'}`; detail = `Model ${claimed || '-'} is not yet in the catalog. Closest catalog candidate: ${near}. Click "Register in Catalog" below to add this model.`; }
   } else if (!claimed) { level = 'info'; title = 'Candidate device found (EXIF Make/Model empty)' + nearNote; detail = 'Signature matches the devices listed below.'; }
-  else if (g.devices.has(claimed)) { level = g.devices.size === 1 ? 'ok' : 'warn'; title = (g.devices.size === 1 ? 'MATCH — signature consistent with EXIF claim' : 'Consistent with EXIF claim, but signature is shared') + nearNote; detail = g.devices.size === 1 ? 'Signature is unique to this device.' : `Signature is shared across ${g.devices.size} devices, so identification is not definitive.`; }
-  else if ([...g.devices.values()].includes(make)) { level = 'bad'; title = 'MISMATCH — matching manufacturer, different model' + nearNote; detail = `EXIF claims ${claimed}, but signature belongs to another model from the same manufacturer.`; }
-  else { level = 'bad'; title = 'MISMATCH — EXIF claim differs from compression signature' + nearNote; detail = `EXIF claims ${claimed}, but the DQT signature matches a completely different device.`; }
+  else if (g.devices.has(claimed)) { level = g.devices.size === 1 ? 'ok' : 'warn'; title = (g.devices.size === 1 ? 'MATCH — signature consistent with EXIF claim' : 'Consistent with EXIF claim, but signature is shared') + nearNote; detail = g.devices.size === 1 ? `Signature is verified for ${claimed}.` : `Signature is shared across ${g.devices.size} devices, so identification is not definitive.`; }
+  else if ([...g.devices.values()].includes(make) && !claimedKnown && matchType === 'near') {
+    level = 'ok';
+    title = `AUTHENTIC ${make} ENCODER FAMILY — ${claimed} (Model Analyzed)` + nearNote;
+    detail = `Detected ${claimed}${rawModel && rawModel !== model ? ' [EXIF code: ' + rawModel + ']' : ''} (Firmware: ${tool || '-'}). This specific model is not yet in the catalog, but its DQT matrix (${simPct(nearestD).toFixed(1)}% similarity, distance ${nearestD.toFixed(2)}) and Huffman tables match the ${titleMake(make)} hardware encoder family (${matches.map(m => m[0]).join(', ')}). Click "Register ${claimed} in Catalog" below to add this model.`;
+  }
+  else if ([...g.devices.values()].includes(make)) { level = 'warn'; title = 'SAME MANUFACTURER, DIFFERENT MODEL' + nearNote; detail = `EXIF claims ${claimed}, while the catalog signature is registered to ${matches.map(m => m[0]).join(', ')} (${titleMake(make)}).`; }
+  else { level = 'bad'; title = 'MISMATCH — EXIF claim differs from compression signature' + nearNote; detail = `EXIF claims ${claimed}, but the DQT signature matches a completely different device (${matches.map(m => m[0]).join(', ')}).`; }
 
-  lastVerify = { file: file.name, claimed, level, title, detail, matches: matches.map(m => m[0]), cat: g ? g.cat : null, j, ex, tool, edited, key: j.dqtKey, dims: j.sof ? j.sof.width + ' x ' + j.sof.height : '-' };
+  lastVerify = { file: file.name, claimed, rawModel, make, model, level, title, detail, matches: matches.map(m => m[0]), cat: g ? g.cat : null, j, ex, tool, edited, key: j.dqtKey, isPortrait, dims: j.sof ? `${dispW} × ${dispH} (${isPortrait ? 'Portrait' : 'Landscape'})` : '-',
+    qRec, sig: { qFull, compRows, fullDevs, fullLevel, fullText, hRows, nativeText, ijg, traces, th, exif: es.counts } };
+  const compHtml = `<h3>Full Signature Components (576 features)</h3><div class="scroll"><table><thead><tr><th>Component</th><th>Features</th><th>Catalog devices with identical values</th><th>Claimed device (${esc(claimed || '-')})</th></tr></thead><tbody>${compRows.map(r => {
+    const status = !claimed ? '-' : r.devs.includes(claimed) ? 'exact match' : (!claimedKnown && r.makes.includes(make)) ? `same make (${titleMake(make)})` : !claimedKnown ? 'new model' : 'differs';
+    return `<tr><td>${r.label}</td><td>${r.n}</td><td class="small">${r.devs.length ? esc(r.devs.slice(0, 4).join('; ')) + (r.devs.length > 4 ? ' +' + (r.devs.length - 4) + ' more' : '') : 'none (unique to query)'}</td><td>${esc(status)}</td></tr>`;
+  }).join('')}</tbody></table></div>`;
+  const huffHtml = `<h3>Huffman Tables (DHT): code-length counts BITS[1..15]</h3><p class="small muted">Each DHT stores BITS[L] = number of Huffman codes of bit-length L. Features = BITS[1..15] of the six tables used by Y, Cb and Cr (6 x 15 = 90 values). First canonical code of each length: start with code = 0; for each length L the first code is code, then code = (code + BITS[L]) &lt;&lt; 1.</p><div class="scroll"><table><thead><tr><th>Table</th><th>BITS[1..15]</th><th>Symbols</th><th>Kraft valid</th></tr></thead><tbody>${hRows.map(r => `<tr><td>${r.label}</td><td class="mono small">${r.counts.join(' ')}</td><td>${r.total}</td><td>${r.valid ? 'yes' : 'NO'}</td></tr>`).join('')}</tbody></table></div>`;
   const kv = o => '<div class="kv">' + Object.entries(o).map(([k, v]) => `<div>${esc(k)}</div><div>${esc(v)}</div>`).join('') + '</div>';
   box.innerHTML = `<div class="alert ${level}">${esc(title)}<small>${esc(detail)}</small></div>
     ${edited ? `<div class="alert warn">Warning: software metadata indicates third-party editing (${esc(tool)}). Results may be unreliable.<small>DQT signature may originate from image editing software rather than the camera.</small></div>` : ''}
+    ${traces.length ? `<div class="alert bad">Editing traces found${tool ? '' : ' (no Software tag present)'}: ${esc(traces.join('; '))}.<small>These traces survive deleting the EXIF Software tag, so this file was probably processed after capture; the catalog match is not reliable evidence of the camera.</small></div>` : ''}
     <div class="card"><div class="grid2"><div>
-      ${imgTag({ thumb: ex.thumb, format: 'JPEG' }, 'thumb-lg')}<p class="small muted">${ex.thumb ? (ex.thumbSrc ? 'Embedded thumbnail' : 'Source image preview') : 'JPEG Placeholder'}</p>
-      <h3>EXIF Claim &amp; Metadata</h3>${kv({ File: file.name, 'Make / Model': claimed || '-', Software: tool || '-', Dimensions: lastVerify.dims, ...(ex.params || {}) })}</div>
-      <div><h3>Match Result</h3>${kv({ 'DQT Signature': j.dqtKey || '-', Category: g ? CAT_LABEL[g.cat] : '-', 'Match Type': matchType === 'exact' ? 'Exact (identical hash)' : matchType === 'near' ? 'Similar variant' : 'None', 'Estimated Quality': qualityText(j.dqt), Type: j.jpegType || '-', Subsampling: j.subsampling || '-' })}
-      <h3>Matching Devices in Catalog</h3>
-      <div class="chips">${matches.map(([d]) => `<span>${esc(d)}</span>`).join('') || '<span class="muted">None</span>'}</div></div></div>
+      <div class="thumb-detail-box ${isPortrait ? 'portrait' : 'landscape'}">${imgTag({ thumb: ex.thumb, format: 'JPEG', isPortrait, orientationExifTool: oInfo.exifTool }, 'thumb-lg')}</div>
+      <p class="small muted">${ex.thumb ? (ex.thumbSrc ? 'Embedded thumbnail' : 'Source image preview') : 'JPEG Placeholder'} · <b>${isPortrait ? 'Portrait' : 'Landscape'}</b> (${esc(oInfo.exifTool)})</p>
+      <h3>EXIF Claim &amp; Device Identification</h3>${kv({ File: file.name, Make: make || '-', 'Resolved Model': model || '-', 'EXIF Model Code': rawModel || '-', 'Device Name': claimed || '-', 'Firmware / Software': tool || '-', Dimensions: lastVerify.dims, ...(ex.params || {}) })}</div>
+      <div><h3>Match &amp; Signature Analysis</h3>${kv({ 'Analyzed Device': claimed || '-', 'Catalog Status': claimedKnown ? 'Registered in Catalog' : 'New Model (Not Yet in Catalog)', 'DQT Signature': j.dqtKey || '-', Category: g ? CAT_LABEL[g.cat] : 'Unique (New)', 'Match Type': matchType === 'exact' ? 'Exact (identical hash)' : matchType === 'near' ? `Same-Make Encoder Family (dist ${nearestD.toFixed(2)})` : 'New Signature', 'Estimated Quality': qualityText(j.dqt), Type: j.jpegType || '-', Subsampling: j.subsampling || '-',
+        'Full Signature (576)': qFull, 'Embedded Thumbnail': th.present ? th.w + ' x ' + th.h : 'absent',
+        'EXIF IFD Counts': es.counts.join(', '), 'IJG Standard Tables': ijg ? 'Exact match (Q' + ijg + ')' : 'No', 'Native Resolution': nativeText })}
+      <h3>Matching / Family Devices in Catalog</h3>
+      <div class="chips">${claimed && !claimedKnown ? `<span><b>${esc(claimed)}</b> (Analyzed Query Model)</span>` : ''}${matches.map(([d]) => `<span>${esc(d)}${!claimedKnown && d !== claimed ? ' (Family Match)' : ''}</span>`).join('') || (!claimed ? '<span class="muted">None</span>' : '')}</div></div></div>
       <h3>Nearest Candidates (DQT distance)</h3>
-      <div class="scroll" style="max-height:220px"><table><thead><tr><th>Device</th><th>Distance</th><th>Similarity</th></tr></thead><tbody>${ranked.slice(0, 8).map(([d, c]) => `<tr><td>${esc(d)}${d === claimed ? ' <span class="badge navy">EXIF claim</span>' : ''}</td><td>${c.d === Infinity ? '-' : c.d.toFixed(2)}</td><td>${simPct(c.d).toFixed(1)}%</td></tr>`).join('') || '<tr><td colspan="3" class="muted">-</td></tr>'}</tbody></table></div>
+      <div class="scroll" style="max-height:220px"><table><thead><tr><th>Device</th><th>Distance</th><th>Similarity</th></tr></thead><tbody>${ranked.slice(0, 8).map(([d, c]) => `<tr><td>${esc(d)}${d === claimed ? ' <span class="badge navy">EXIF claim</span>' : (c.make === make ? ' <span class="badge navy">Same Make (' + esc(make) + ')</span>' : '')}</td><td>${c.d === Infinity ? '-' : c.d.toFixed(2)}</td><td>${simPct(c.d).toFixed(1)}%</td></tr>`).join('') || '<tr><td colspan="3" class="muted">-</td></tr>'}</tbody></table></div>
+      <h3>Full-Signature Result</h3><div class="alert ${fullLevel}" style="margin:6px 0">${esc(fullText)}</div>
+      ${compHtml}${huffHtml}
       <h3>DQT Matrix</h3>${dqtHtml(j.dqt)}
-      <p><button class="btn" id="btnVerifyPdf">Download PDF Report</button></p></div>`;
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="btnVerifyPdf">Download PDF Report</button>
+        ${claimed && !edited && !traces.length && !claimedKnown ? `<button class="btn secondary" id="btnVerifyRegister">Register ${esc(claimed)} in Catalog</button>` : ''}
+      </div></div>`;
 }
 
 /* ---------------- PDF ---------------- */
@@ -673,16 +751,55 @@ function pdfDoc() {
   return api;
 }
 
+function pdfMethod(p) {
+  p.line('Signature Extraction Method (Kee, Johnson & Farid, 2011)', 12, true);
+  [
+    '1. Parse JPEG markers sequentially with DataView (SOI, APPn, DQT, SOF, DHT, DRI) until the first SOS.',
+    '2. DQT: each table = Pq/Tq byte + 64 entries stored in zig-zag order; entries are un-zig-zagged to natural order. Tq0, Tq1, Tq2 give 3 x 64 = 192 features (missing tables are zero).',
+    '3. Huffman (DHT): every table holds a Tc/Th byte (class DC/AC and table id), BITS[1..16] and HUFFVAL. BITS[L] is the number of codes of bit-length L. SOS assigns a DC table (Td) and AC table (Ta) to each component, so the six tables Y-DC, Y-AC, Cb-DC, Cb-AC, Cr-DC, Cr-AC are selected. Features = BITS[1..15] of each: 6 x 15 = 90.',
+    '4. Dimensions: (width, height) sorted to (min, max), so portrait and landscape of the same camera give the same 2 features.',
+    '5. Thumbnail: IFD1 tags 0x0201 (offset) and 0x0202 (length) locate the embedded JPEG, which is parsed by the same code: dimensions 2 + DQT 192 + Huffman 90 = 284 features. A missing thumbnail gives zeros.',
+    '6. EXIF structure: entry counts of IFD0, Exif IFD, Interoperability IFD, IFD1 (thumbnail), GPS IFD, then number of extra IFDs, entries in extra IFDs and parser errors = 8 features. Independent of tag values such as Make/Model.',
+    'Total = 192 + 90 + 2 + 284 + 8 = 576 features. The full-signature ID is a 64-bit hash of the 576-value vector.'
+  ].forEach(t => p.line(t, 9));
+  p.gap();
+  p.line('Huffman Computation', 12, true);
+  [
+    'Feature of table t, length L:  f[t][L] = BITS_t[L], L = 1..15   (BITS_t is read directly from the 16 count bytes after the Tc/Th byte).',
+    'Canonical code check (JPEG Annex C): code = 0; for L = 1..16 { first code of length L = code; code = (code + BITS[L]) << 1 }. A table is valid only if code never exceeds 2^L (Kraft inequality).',
+    'Number of symbols of a table = sum of BITS[L]; HUFFVAL (the symbols) is not part of the 90 features but is included in the separate DHT hash.'
+  ].forEach(t => p.line(t, 9));
+  p.gap();
+}
+function pdfHuff(p, rows) {
+  rows.forEach(r => {
+    p.line(r.label + '  BITS[1..15] = [' + r.counts.join(' ') + ']  symbols(L<=15) = ' + r.total + '  Kraft valid: ' + (r.valid ? 'yes' : 'NO'), 9);
+    p.line('   first canonical codes: ' + (r.first.join(', ') || '-'), 8);
+  });
+  p.gap();
+}
+
 function verifyPdf() {
   const v = lastVerify; if (!v) return;
-  const p = pdfDoc();
+  const p = pdfDoc(), s = v.sig;
   p.line('JPEG Signature Verification Report', 16, true);
   p.line('Generated: ' + new Date().toLocaleString('en-US'), 9); p.gap();
   p.line('File: ' + v.file); p.line('EXIF Claim: ' + (v.claimed || '-')); p.line('Software: ' + (v.tool || '-') + (v.edited ? '  [INDICATES EDITING]' : ''));
-  p.line('Dimensions: ' + v.dims); p.line('DQT Signature: ' + (v.key || '-')); p.line('Type / Subsampling: ' + (v.j.jpegType || '-') + ' / ' + (v.j.subsampling || '-')); p.gap();
-  p.line('Conclusion: ' + v.title, 12, true); p.line(v.detail);
-  p.line('Matching devices in catalog: ' + (v.matches.join(', ') || '-')); p.gap();
-  if (v.ex.thumb) p.img(v.ex.thumb, 40, 30);
+  p.line('Dimensions: ' + v.dims); p.line('DQT Signature: ' + (v.key || '-')); p.line('Full Signature (576 features): ' + s.qFull);
+  p.line('Type / Subsampling: ' + (v.j.jpegType || '-') + ' / ' + (v.j.subsampling || '-')); p.gap();
+  p.line('Conclusion (DQT): ' + v.title, 12, true); p.line(v.detail);
+  p.line('Matching devices in catalog (DQT): ' + (v.matches.join(', ') || '-')); p.gap();
+  p.line('Full-signature result: ' + s.fullText, 10, true);
+  p.line('Native resolution: ' + s.nativeText, 9);
+  p.line('IJG standard tables: ' + (s.ijg ? 'exact match Q' + s.ijg + ' (libjpeg-style encoder)' : 'no'), 9);
+  p.line('Editing traces without Software tag: ' + (s.traces.length ? s.traces.join('; ') : 'none found (APP13/APP14 markers, XMP history, IJG tables)'), 9); p.gap();
+  p.line('Signature Components', 12, true);
+  s.compRows.forEach(r => p.line(r.label + ' [' + r.n + ' features] -> identical in catalog devices: ' + (r.devs.slice(0, 6).join('; ') || 'none') + (r.devs.length > 6 ? ' (+' + (r.devs.length - 6) + ' more)' : ''), 9));
+  p.line('Thumbnail: ' + (s.th.present ? s.th.w + ' x ' + s.th.h : 'absent') + '   EXIF IFD counts [IFD0, Exif, Interop, IFD1, GPS, extra IFDs, extra entries, errors]: ' + s.exif.join(', '), 9); p.gap();
+  pdfMethod(p);
+  p.line('Huffman Tables of This Image', 12, true);
+  pdfHuff(p, s.hRows);
+  if (v.ex.thumb) p.img(v.ex.thumb, v.isPortrait ? 30 : 40, v.isPortrait ? 40 : 30);
   p.dqt(v.j.dqt);
   Object.entries(v.ex.params || {}).forEach(([k, val]) => p.line(k + ': ' + val, 9));
   p.doc.save('verification-' + v.file.replace(/\.[^.]+$/, '') + '.pdf');
@@ -692,7 +809,16 @@ function catalogPdf() {
   const groups = groupSignatures(), p = pdfDoc();
   p.line('JPEG Signature Catalog Report', 16, true);
   p.line('Generated: ' + new Date().toLocaleString('en-US'), 9);
-  p.line(`Samples: ${samples.length} | Devices: ${new Set(samples.map(s => s.device)).size} | Signatures: ${groups.size}`); p.gap();
+  p.line(`Samples: ${samples.length} | Devices: ${new Set(samples.map(s => s.device)).size} | DQT signature families: ${groups.size}`); p.gap();
+  p.line('Equivalence Class Analysis', 12, true);
+  p.line('Class size n = number of devices (Make + Model) sharing one signature.', 9);
+  EQ_SETS.forEach(([l, f]) => {
+    const st = eqStats(f);
+    p.line(`${l}: classes ${st.classes} | n=1: ${st.dist[0]}, n=2: ${st.dist[1]}, n=3: ${st.dist[2]}, n=4: ${st.dist[3]}, n>=5: ${st.dist[4]} | median n ${st.median} | max n ${st.max} | devices uniquely identified ${st.uniq}/${st.devs}`, 9);
+  });
+  const cs = configStats();
+  p.line(`Configurations (device + full signature) with >= ${MIN_CONFIG_SAMPLES} samples: ${cs.ok} of ${cs.total}`, 9); p.gap();
+  pdfMethod(p);
   ['unique', 'same', 'multi'].forEach(c => {
     p.line(CAT_LABEL[c], 12, true);
     const l = [...groups.values()].filter(g => g.cat === c);
@@ -721,66 +847,95 @@ async function importJson(file) {
     toast(`Import: ${fresh.length} new samples (${arr.length - fresh.length} duplicates skipped)`);
   } catch (e) { toast('Import failed: ' + e.message); }
 }
+/* Merge the bundled dataset into the local repository. Bundled records overwrite local copies with the same
+ * file path, so newly added signature fields (Huffman, thumbnail, EXIF structure) reach existing IndexedDB data. */
 async function loadBundled(url = 'signatures.json', replace = false) {
-  try {
-    let d = null;
-    if (window.DEFAULT_SIGNATURES && (!url || url === 'signatures.json')) {
-      d = window.DEFAULT_SIGNATURES;
-    } else {
-      const r = await fetch(url, { cache: 'no-cache' });
-      d = await r.json();
-    }
-    if (replace) { await DB.clear(); samples = []; }
-
-    const map = new Map();
-    (samples || []).forEach(s => map.set(s.file || s.id, s));
-
-    (d.samples || []).forEach(newItem => {
-      const key = newItem.file || newItem.id;
-      const existing = map.get(key) || samples.find(s => s.file === newItem.file || s.id === newItem.id);
-      if (existing) {
-        // Force update latest full-color thumbnail base64
-        if (newItem.thumb && newItem.thumb.length > 50) {
-          existing.thumb = newItem.thumb;
-          existing.thumbSrc = newItem.thumbSrc || 'GENERATED';
+  let d = window.DEFAULT_SIGNATURES || null;
+  if (typeof location !== 'undefined' && /^https?:/.test(location.protocol)) {
+    try {
+      const r = await fetch((url || 'signatures.json') + '?t=' + Date.now(), { cache: 'no-store' });
+      if (r.ok) {
+        const live = await r.json();
+        if (!d || (live && live.samples && (!d.samples || live.samples.length >= d.samples.length || (live.build || 0) >= (d.build || 0)))) {
+          d = live;
+          window.DEFAULT_SIGNATURES = live;
         }
-        existing.bundled = true;
-      } else {
-        newItem.bundled = true;
-        map.set(key, newItem);
       }
-    });
+    } catch (e) { /* fallback to DEFAULT_SIGNATURES */ }
+  }
+  if (!d) { toast(`Failed to load ${url}`); return 0; }
+  if (replace) { await DB.clear(); samples = []; }
+  const map = new Map();
+  (samples || []).forEach(s => map.set(s.file || s.id, s));
+  (d.samples || []).forEach(n => {
+    const key = n.file || n.id, ex = map.get(key);
+    if (ex) Object.assign(ex, n, { bundled: true });
+    else { n.bundled = true; map.set(key, n); }
+  });
+  samples = Array.from(map.values());
+  await DB.putMany(samples);
+  renderAll();
+  return samples.length;
+}
 
-    samples = Array.from(map.values());
-    await DB.putMany(samples);
-    renderAll();
-    return samples.length;
-  } catch (e) {
-    if (window.DEFAULT_SIGNATURES) {
-      const d = window.DEFAULT_SIGNATURES;
-      if (replace) { await DB.clear(); samples = []; }
-      const map = new Map();
-      (samples || []).forEach(s => map.set(s.file || s.id, s));
-      (d.samples || []).forEach(newItem => {
-        const key = newItem.file || newItem.id;
-        const existing = map.get(key) || samples.find(s => s.file === newItem.file || s.id === newItem.id);
-        if (existing) {
-          if (newItem.thumb && newItem.thumb.length > 50) {
-            existing.thumb = newItem.thumb;
-            existing.thumbSrc = newItem.thumbSrc || 'GENERATED';
+/* Automatically discover newly added folders/files under images/ when running on a local HTTP server with directory listing */
+async function autoDiscoverImagesFolder() {
+  if (typeof location === 'undefined' || !/^https?:/.test(location.protocol)) return 0;
+  const parseHrefList = html => [...html.matchAll(/href=["']([^"'?#]+)["']/gi)].map(m => decodeURIComponent(m[1])).filter(h => h && !h.startsWith('..') && !h.startsWith('/') && !h.startsWith('http'));
+  try {
+    const res = await fetch('images/?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) return 0;
+    const ct = res.headers.get('content-type') || '';
+    if (!ct.includes('text/html')) return 0;
+    const rootHtml = await res.text();
+    const entries = parseHrefList(rootHtml);
+    const knownFiles = new Set((samples || []).map(s => s.file));
+    const discovered = [];
+    for (const entry of entries) {
+      const clean = entry.replace(/\/+$/, '');
+      if (!clean || clean.startsWith('.')) continue;
+      if (/\.(jpe?g|jfif)$/i.test(clean)) {
+        const rel = 'images/' + clean;
+        if (!knownFiles.has(rel)) discovered.push(rel);
+      } else {
+        try {
+          const subRes = await fetch('images/' + encodeURIComponent(clean) + '/?t=' + Date.now(), { cache: 'no-store' });
+          if (subRes.ok && (subRes.headers.get('content-type') || '').includes('text/html')) {
+            const subFiles = parseHrefList(await subRes.text());
+            for (const sf of subFiles) {
+              const sfName = sf.split('/').pop();
+              if (/\.(jpe?g|jfif)$/i.test(sfName) && !sfName.startsWith('.')) {
+                const rel = `images/${clean}/${sfName}`;
+                if (!knownFiles.has(rel)) discovered.push(rel);
+              }
+            }
           }
-          existing.bundled = true;
-        } else {
-          newItem.bundled = true;
-          map.set(key, newItem);
-        }
-      });
-      samples = Array.from(map.values());
-      await DB.putMany(samples);
-      renderAll();
-      return samples.length;
+        } catch (e) { /* ignore subfolder error */ }
+      }
     }
-    toast(`Failed to load ${url}`); return 0;
+    if (!discovered.length) return 0;
+    const fresh = [];
+    for (const relPath of discovered) {
+      try {
+        const r = await fetch(relPath);
+        if (!r.ok) continue;
+        const buf = await r.arrayBuffer();
+        const it = await analyze(relPath, buf, buf.byteLength);
+        if (it.status === 'accepted' && it.rec) {
+          it.rec.bundled = true;
+          fresh.push(it.rec);
+        }
+      } catch (e) { /* skip unreadable file */ }
+    }
+    if (fresh.length) {
+      await DB.putMany(fresh);
+      samples = samples.concat(fresh);
+      renderAll();
+      toast(`Auto-discovered ${fresh.length} new image(s) from images/ folder`);
+    }
+    return fresh.length;
+  } catch (e) {
+    return 0;
   }
 }
 
@@ -812,6 +967,16 @@ function init() {
     ingest(files);
   });
   $('#filterStatus').onchange = renderIngest;
+  $('#ingestBody').onclick = e => {
+    const tr = e.target.closest('tr[data-ingest-idx]');
+    if (!tr) return;
+    const item = staged[Number(tr.dataset.ingestIdx)];
+    if (item && item.rec && item.rec.dqt) {
+      $('#modalTitle').textContent = item.name.split('/').pop();
+      $('#modalBody').innerHTML = sampleDetailHtml(item.rec);
+      $('#photoModal').style.display = 'flex';
+    }
+  };
   $('#btnAddAccepted').onclick = async () => {
     const ids = new Set(samples.map(s => s.id));
     const fresh = []; staged.forEach(s => { if (s.status === 'accepted' && !ids.has(s.rec.id)) { ids.add(s.rec.id); fresh.push(s.rec); } });
@@ -834,7 +999,20 @@ function init() {
   $('#btnClear').onclick = async () => { if (confirm('Clear the entire local repository?')) { await DB.clear(); samples = []; renderAll(); } };
   $('#btnCatalogPdf').onclick = catalogPdf;
   $('#inVerify').onchange = e => { if (e.target.files[0]) verify(e.target.files[0]); e.target.value = ''; };
-  $('#verifyResult').onclick = e => { if (e.target.id === 'btnVerifyPdf') verifyPdf(); };
+  $('#verifyResult').onclick = async e => {
+    if (e.target.id === 'btnVerifyPdf') verifyPdf();
+    if (e.target.id === 'btnVerifyRegister' && lastVerify && lastVerify.qRec) {
+      const rec = lastVerify.qRec;
+      if (!samples.some(s => s.id === rec.id)) {
+        await DB.putMany([rec]);
+        samples.push(rec);
+        renderAll();
+        toast(`Registered ${rec.device} (${rec.dqtKey}) in catalog`);
+        e.target.disabled = true;
+        e.target.textContent = `Registered ${rec.device} in Catalog`;
+      }
+    }
+  };
 
   // Gallery events
   $('#galSearch').oninput = renderGallery;
@@ -862,16 +1040,11 @@ function init() {
     DB.tx = async () => {};
   }
 
-  // Check if database is empty OR has legacy/grayscale MPF thumbnails
-  const needUpdate = !samples || !samples.length || samples.some(s => !s.thumb || s.thumb.length < 50 || s.thumbSrc === 'MPF' || !s.orientationLabel);
+  // Check if database is empty, has legacy thumbnails, or if signatures.json has newer/more samples
+  await loadBundled('signatures.json', false);
   const bundle = window.DEFAULT_SIGNATURES;
-  const build = bundle && bundle.build ? String(bundle.build) : '';
-  let stored = ''; try { stored = localStorage.getItem('jsa-build') || ''; } catch (e) { /* ignore */ }
-
-  if (bundle && (needUpdate || (build && stored !== build) || (bundle.samples && samples.length < bundle.samples.length))) {
-    await loadBundled('signatures.json', false);
-    try { localStorage.setItem('jsa-build', build); } catch (e) { /* ignore */ }
-  } else {
-    renderAll();
+  if (bundle && bundle.build) {
+    try { localStorage.setItem('jsa-build', String(bundle.build)); } catch (e) { /* ignore */ }
   }
+  await autoDiscoverImagesFolder();
 })();

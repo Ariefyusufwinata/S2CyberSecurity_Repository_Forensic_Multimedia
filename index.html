@@ -54,7 +54,7 @@
       </div>
       <div class="card">
         <h2>Filtering &amp; Screening Results</h2>
-        <p class="small muted">Stage 1: Binary JPEG SOI validation (FF D8 FF) &middot; Stage 2: Elimination of third-party software edits (Photoshop, GIMP, etc.) &middot; Stage 3: EXIF Make/Model presence required as hardware ground-truth.</p>
+        <p class="small muted">Stage 1: Binary JPEG SOI validation (FF D8 FF) &middot; Stage 2: Rejection of third-party software edits (Software tag, XMP CreatorTool) &middot; Stage 3: Editing traces without a Software tag (Photoshop APP13, Adobe APP14, XMP history, IJG standard tables) &middot; Stage 4: Flickr resize derivatives (640, 800, 1024, ...) &middot; Stage 5: EXIF Make/Model required &middot; Stage 6: DQT outliers versus the catalog.</p>
         <div class="tiles" id="ingestTiles"></div>
         <div class="repo-actions" style="margin-bottom:10px">
           <button class="btn" id="btnAddAccepted" disabled>Save Accepted to Repository</button>
@@ -132,9 +132,14 @@
 
     <section id="classify" class="tab">
       <div class="card">
-        <h2>Signature Classification (Based on DQT)</h2>
+        <h2>Signature Classification (DQT + Full 576-Feature Signature)</h2>
         <div class="tiles" id="classTiles"></div>
         <button class="btn sec" id="btnCatalogPdf">Catalog Report (PDF)</button>
+      </div>
+      <div class="card">
+        <h2>Equivalence Class Analysis</h2>
+        <p class="small muted">Following Kee, Johnson &amp; Farid (2011): a class is the set of devices that share one signature (size n). Adding Huffman tables, dimensions, thumbnail and EXIF structure to the DQT should shrink classes and raise the share of uniquely identified devices.</p>
+        <div id="eqStats"></div>
       </div>
       <div class="card">
         <h2>Unique <span class="small muted">&middot; Exclusive to 1 device model</span></h2>
@@ -223,6 +228,7 @@
   <script src="vendor/exif-reader.js"></script>
   <script src="vendor/jspdf.umd.min.js"></script>
   <script src="dataset.js"></script>
+  <script src="huffman.js"></script>
   <script src="app.js"></script>
 </body>
 

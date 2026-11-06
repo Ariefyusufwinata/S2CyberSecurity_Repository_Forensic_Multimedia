@@ -2,6 +2,7 @@
 const fs = require('fs'), path = require('path');
 global.window = global;
 global.ExifReader = require('../vendor/exif-reader.js');
+require('../huffman.js');
 let src = fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8');
 src = src.slice(0, src.indexOf('const isJpegName'))
   .replace(/^const \$ =.*$/m, '').replace(/^const esc =.*$/m, '')
@@ -9,6 +10,22 @@ src = src.slice(0, src.indexOf('const isJpegName'))
 eval(src + ';global.analyze=analyze;global.parseOrientation=parseOrientation;global.ORIENTATION_MAP=ORIENTATION_MAP;');
 const walk = d => fs.readdirSync(d, { withFileTypes: true }).flatMap(e =>
   e.isDirectory() ? walk(path.join(d, e.name)) : /\.(jpe?g|jfif)$/i.test(e.name) ? [path.join(d, e.name)] : []);
+
+// Strip APP1 Exif from the already-rotated sips thumbnail so browsers do not apply EXIF Orientation a second time
+function stripExifApp1(u8) {
+  if (u8[0] !== 0xFF || u8[1] !== 0xD8) return u8;
+  const chunks = [u8.subarray(0, 2)];
+  let p = 2, n = u8.length;
+  while (p + 4 <= n && u8[p] === 0xFF) {
+    const m = u8[p + 1];
+    if (m === 0xDA || m === 0xD9) { chunks.push(u8.subarray(p)); break; }
+    const len = (u8[p + 2] << 8) | u8[p + 3], end = Math.min(p + 2 + len, n);
+    const isExif = m === 0xE1 && u8[p + 4] === 0x45 && u8[p + 5] === 0x78 && u8[p + 6] === 0x69 && u8[p + 7] === 0x66;
+    if (!isExif) chunks.push(u8.subarray(p, end));
+    p = end;
+  }
+  return Buffer.concat(chunks);
+}
 (async () => {
   const root = path.join(__dirname, '../images'), out = [], rej = [];
   for (const f of walk(root).sort()) {
@@ -37,7 +54,7 @@ const walk = d => fs.readdirSync(d, { withFileTypes: true }).flatMap(e =>
       sipsArgs.push(f, '--out', tmp);
       try {
         require('child_process').execFileSync('sips', sipsArgs, { stdio: 'ignore' });
-        it.rec.thumb = 'data:image/jpeg;base64,' + fs.readFileSync(tmp).toString('base64');
+        it.rec.thumb = 'data:image/jpeg;base64,' + stripExifApp1(fs.readFileSync(tmp)).toString('base64');
         it.rec.thumbSrc = 'GENERATED_COLOR_ROTATED';
       } catch (e) {}
       it.rec.bundled = true;
