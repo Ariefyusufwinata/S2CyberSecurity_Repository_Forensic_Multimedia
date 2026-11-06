@@ -88,31 +88,71 @@ An exact match to $T_Q$ on an image lacking a hardware `MakerNote` (`0x927C`) is
 
 ---
 
-## 🔬 Forensic Design & End-to-End Methodology
+## 🔬 Forensic Design, Information Flow & End-to-End Methodology
 
-The forensic architecture follows the methodology of ***Digital Image Authentication from JPEG Headers*** (*Kee, Johnson & Farid, IEEE Transactions on Information Forensics and Security, 2011*) across four integrated stages:
+The forensic architecture follows the methodology of ***Digital Image Authentication from JPEG Headers*** (*Kee, Johnson & Farid, IEEE Transactions on Information Forensics and Security, 2011*) across an end-to-end pipeline from raw binary header parsing to downloadable PDF forensic evidence reports:
 
+```mermaid
+flowchart TD
+    A["Input JPEG Stream (images/ Folder, Upload, ZIP, or Query File)"] --> B["Stage 1: Binary Header & Anti-Tampering Screening"]
+    B --> B1["1. Magic Bytes (FF D8 FF) & Marker Sequence Scan"]
+    B1 --> B2["2. EXIF Software & XMP CreatorTool Check"]
+    B2 --> B3["3. Hidden Edit Traces (APP13 8BIM, APP14 Adobe, XMP History, IJG Table w/o MakerNote)"]
+    B3 --> B4["4. Flickr CDN Resize Derivative Check"]
+    B4 --> B5["5. Hardware Make/Model & Samsung SM-Code / Firmware Resolution"]
+    B5 --> B6["6. Intra-Device DQT Outlier Screening (L1 Distance > 2.0)"]
+
+    B6 -->|"Rejected"| R["Rejected Evidence Log (Explicit Forensic Rejection Reason)"]
+    B6 -->|"Accepted"| C["Stage 2: 576-Feature Forensic Information Extraction (huffman.js)"]
+
+    C --> C1["Primary DQT Matrices (Tq0, Tq1, Tq2 = 192 Features)"]
+    C --> C2["Component-Bound Huffman BITS[1..15] + Kraft Check (6x15 = 90 Features)"]
+    C --> C3["Orientation-Invariant Sorted Dimensions (min, max = 2 Features)"]
+    C --> C4["Embedded EXIF IFD1 Thumbnail Stream (2 Dims + 192 DQT + 90 DHT = 284 Features)"]
+    C --> C5["EXIF IFD Directory Structure Counts (IFD0, Exif, Interop, IFD1, GPS, Extra = 8 Features)"]
+    C --> C6["Orientation & Optical Metadata (ExifTool Horizontal Check, ISO, Exposure, Lens)"]
+
+    C1 & C2 & C3 & C4 & C5 & C6 --> D["Stage 3: Forensic Repository & Equivalence Class Engine"]
+    D --> D1["Persistent Storage (signatures.json + IndexedDB jpeg-sig-db)"]
+    D1 --> D2["Equivalence Class Size (n) & Signature Classification"]
+    D2 --> D2A["Unique (n = 1 Device)"]
+    D2 --> D2B["Shared - Same Manufacture (n = 2 Devices, 1 Brand)"]
+    D2 --> D2C["Shared - Multi-Device (n >= 3 Devices or Cross-Brand)"]
+
+    D2A & D2B & D2C --> E["Stage 4: Forensic Verification & Multi-Level PDF Evidence Reporting"]
+    E --> P1["Sample Forensic PDF (samplePdf) - Full Per-File Evidence Dossier"]
+    E --> P2["Device Profile PDF (devicePdf) - Per-Camera DQT/DHT & File Inventory"]
+    E --> P3["Catalog Repository PDF (catalogPdf) - Equivalence Classes & 198-File Inventory"]
+    E --> P4["Verification Report PDF (verifyPdf) - Query Image Authentication & Component Match"]
 ```
-[Query / Ingested JPEG Image]
-              │
-              ▼
-(1) 6-Stage Anti-Tampering & Ground-Truth Filter
-    (SOI/DQT check → Software tag → APP13/APP14/XMP/IJG traces → Flickr resize → Make/Model/SM-code → DQT Outlier)
-              │
-              ▼
-(2) 576-Feature Header Signature Extraction (huffman.js)
-    [192 Main DQT] + [90 Main Huffman BITS] + [2 Sorted Dims] + [284 Thumbnail Stream] + [8 EXIF IFD Counts]
-              │
-              ▼
-(3) Equivalence Class & Uniqueness Classification
-    • Unique (n = 1 device)
-    • Shared — Same Manufacture (n = 2 devices, 1 brand)
-    • Shared — Multi-Device (n ≥ 3 devices or cross-brand)
-              │
-              ▼
-(4) Single-Image Forensic Verification & PDF Evidence Reporting
-    Component-by-component 576-feature comparison, DQT distance ranking, & canonical Huffman code verification
-```
+
+### Detailed Forensic Information Flow (Step-by-Step)
+
+1. **Stage 1 — Binary Acquisition & 6-Layer Anti-Tampering Screening (`analyze()` & `editTraces()`):**
+   - **Binary Stream Inspection:** Reads raw JPEG segments (`SOI`, `APP0`–`APP15`, `DQT`, `SOF0`/`SOF2`, `DHT`, `DRI`, `SOS`) directly via `DataView` without re-decoding pixel data.
+   - **Tampering & Re-encoding Detection:** Filters out edited or re-compressed images using both explicit metadata (`Software` / `CreatorTool`) and **metadata-independent binary traces** (`APP13 Photoshop 3.0 / 8BIM`, `APP14 Adobe`, `xmpMM:History` / `stEvt:action`, exact ITU-T T.81 IJG Annex K standard tables lacking a hardware `MakerNote`, and Flickr CDN resized dimensions).
+   - **Device & Firmware Normalization (`resolveDeviceMeta()`):** Normalizes manufacturer aliases and resolves hardware model codes and baseband firmware strings (e.g., `Make: SAMSUNG`, `Model: SM-N985F`, `Software: N985FXXSIHYH3` $\rightarrow$ **`Samsung Galaxy Note20 Ultra (SM-N985F)`**).
+
+2. **Stage 2 — 576-Feature Forensic Information Extraction (`huffman.js`):**
+   - **Primary Compression Matrix (192 Features):** De-zig-zags Luminance ($T_{q0}$) and Chrominance ($T_{q1}, T_{q2}$) $8 \times 8$ quantization tables (`dqt192()`), computes 64-bit FNV-1a hash (`dqtKey`), and estimates the IJG quality factor ($Q$).
+   - **Huffman Entropy Distribution (90 Features):** Maps `SOS` component selectors (`Td`/`Ta`) to `Y-DC`, `Y-AC`, `Cb-DC`, `Cb-AC`, `Cr-DC`, and `Cr-AC`, extracts code-length counts `BITS[1..15]`, generates canonical Huffman codes (ITU-T T.81 Annex C), and validates Kraft's inequality ($\sum_{L=1}^{15} \text{BITS}[L]\cdot 2^{-L} \le 1$).
+   - **Sensor Geometry & `ExifTool` Orientation (2 Features + Display Metadata):** Extracts sorted native sensor dimensions $(\min(w,h), \max(w,h))$ and evaluates **`ExifTool Description`** (`Horizontal (normal)` $\rightarrow$ **Landscape** `4:3`; `Rotate 90 CW` / `Rotate 270 CW` $\rightarrow$ **Portrait** `3:4`).
+   - **Embedded Thumbnail Forensics (284 Features):** Locates the secondary JPEG stream inside EXIF `IFD1` (`0x0201` offset, `0x0202` length) and extracts its dimensions (2), DQT matrices (192), and Huffman `BITS[1..15]` counts (90).
+   - **EXIF Directory Topology (8 Features):** Counts raw directory entries across `IFD0`, `Exif SubIFD`, `Interoperability IFD`, `IFD1`, `GPS IFD`, extra IFD count, extra IFD entries, and parser errors (`exifStruct()`).
+
+3. **Stage 3 — Equivalence Class Analysis & Repository Classification (`groupSignatures()` & `eqStats()`):**
+   - Groups identical compression signatures and clusters scene-adaptive DQT variants ($D(A,B) \le 1.0$) strictly within the same camera model (`sameDevs`).
+   - Evaluates **Equivalence Class Size ($n$)** across DQT-only (192), DQT + Huffman (282), and Full Signature (576) feature sets, classifying every signature into **Unique** ($n=1$), **Shared (Same Manufacture)** ($n=2$, single brand), or **Shared (Multi-Device)** ($n \ge 3$ or cross-brand).
+
+4. **Stage 4 — Forensic PDF Evidence Extraction & Reporting (`samplePdf`, `devicePdf`, `catalogPdf`, `verifyPdf`):**
+   - Every file and device in the repository can be exported directly to a structured **Forensic PDF Report**:
+
+| PDF Report Type | Trigger Location in UI | Extracted Forensic Information Included in PDF |
+| :--- | :--- | :--- |
+| **1. Sample Forensic Report (`samplePdf`)** | • **Photo Gallery** card (`Download Forensic PDF`)<br>• **Sample Detail Modal** (`Download Sample Forensic PDF`)<br>• **Catalog Device Table** (`PDF` button per row)<br>• **Ingestion Table** (`PDF` button per accepted row) | Upright preview image, File & Folder path, Byte size, Make, Resolved Model & EXIF Model Code, Firmware, `ExifTool Description` & Horizontal check, Display vs. Native Sensor dimensions, `dqtKey` (192) & `fullKey` (576), Equivalence Class category, Thumbnail status (284), EXIF IFD counts (8), all EXIF optical tags (ISO, Exposure, F-Number, Focal Length, Lens, Timestamp), full $8 \times 8$ DQT matrices ($T_{q0}, T_{q1}$), and 6-table Huffman `BITS[1..15]` + canonical codes. |
+| **2. Device Profile Report (`devicePdf`)** | • **Catalog Tab** (`Download Device Samples PDF` when viewing a device) | Aggregated device profile, distinct DQT & 576-feature signature counts, all $8 \times 8$ DQT matrices and Huffman `BITS[1..15]` profiles for that camera model, and the complete per-file inventory of all samples belonging to that device. |
+| **3. Repository Catalog Report (`catalogPdf`)** | • **Repository Tab** (`Download Catalog PDF`) | Global repository summary, formal **Equivalence Class Analysis** table ($n=1..5+$, median $n$, max $n$, uniquely identified devices), extraction methodology, signature classification lists (`Unique`, `Shared`), and the complete 198-file repository inventory. |
+| **4. Single-Image Verification Report (`verifyPdf`)** | • **Verification Tab** (`Download PDF Report`) | Forensic authentication verdict (`MATCH`, `AUTHENTIC ENCODER FAMILY`, or `MISMATCH / EDIT TRACES`), component-by-component 576-feature comparison against catalog devices, DQT distance ranking, native resolution check, IJG/APP13/APP14/XMP tamper check, Huffman canonical codes, and $8 \times 8$ DQT matrices. |
 
 ---
 
