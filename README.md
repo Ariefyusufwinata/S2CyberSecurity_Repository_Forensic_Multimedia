@@ -399,6 +399,48 @@ Open `http://localhost:8000` in your web browser.
 
 ---
 
+## 🛠️ Standalone CLI Forensic Matching Tool (`tools/matching`)
+
+The matching and verification engine is cleanly separated into a standalone command-line forensic tool located under [`tools/matching/`](tools/matching/) and executable via `tools/matching` or `tools/matching.js`.
+
+### 1. Command-Line Usage (CLI)
+
+Analyze and match any target JPEG image directly from the terminal without opening a browser:
+
+```bash
+# Basic matching against signatures.json:
+node tools/matching "images/DATASET INDAH/DSC_0803.JPG"
+
+# With full 8x8 Quantization Tables (DQT) printed in terminal:
+node tools/matching "images/DATASET INDAH/DSC_0803.JPG" --matrix
+
+# Output full forensic results in JSON format (for piping or automated scripts):
+node tools/matching "images/DATASET CIPUT/20261026_100806.jpg" --json
+
+# Using custom catalog file:
+node tools/matching "target.jpg" --catalog "path/to/custom-signatures.json"
+```
+
+### 2. Programmatic Node.js Module API
+
+The matching engine can also be imported directly into other scripts or automated test harnesses:
+
+```javascript
+const { matchFile, matchBuffer } = require('./tools/matching');
+
+// Match from file path:
+const result = matchFile('images/DATASET INDAH/DSC_0803.JPG');
+console.log('Verdict:', result.verdict.title);
+console.log('Claimed:', result.claimed.device);
+console.log('Nearest candidate:', result.rankedCandidates[0]);
+
+// Match from in-memory Buffer:
+const buf = fs.readFileSync('evidence.jpg');
+const bufferResult = matchBuffer('evidence.jpg', buf);
+```
+
+---
+
 ## 🌐 Deployment to GitHub Pages
 
 1. Commit and push changes to GitHub:
