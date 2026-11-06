@@ -1,10 +1,4 @@
 'use strict';
-/* ============================================================================
- * tools/matching/engine.js — Standalone Forensic Signature Matching Engine
- * Reference: Eric Kee, Micah K. Johnson & Hany Farid,
- *            "Digital Image Authentication from JPEG Headers",
- *            IEEE Transactions on Information Forensics and Security, 2011.
- * ============================================================================ */
 
 const fs = require('fs');
 const path = require('path');
