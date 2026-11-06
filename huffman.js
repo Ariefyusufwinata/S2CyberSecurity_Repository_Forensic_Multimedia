@@ -20,7 +20,8 @@ const ZZ = [
   53, 60, 61, 54, 47, 55, 62, 63
 ];
 
-const EDITORS = /photoshop|gimp|lightroom|paint\.net|pixelmator|affinity|snapseed|picsart|canva|corel|paintshop|capture one|darktable|rawtherapee|luminar|photoscape|fotor|facetune|vsco|adobe|acdsee|irfanview|imagemagick|photoworks|pixlr|sumopaint/i;
+const EDITORS = /photoshop|gimp|lightroom|paint\.net|pixelmator|affinity|snapseed|picsart|canva|corel|paintshop|capture one|comobile|darktable|rawtherapee|luminar|photoscape|fotor|facetune|vsco|adobe|acdsee|irfanview|imagemagick|photoworks|pixlr|sumopaint|meitu|instagram|hypic|remini|b612|ulike|snow|beautyplus|wink|capcut|inshot|polarr|afterlight|picasa|faststone|xnview|photomator/i;
+const CAMERA_FW = /\b([A-Z]\d{3}[A-Z]{1,2})(?:XX|DX|ZS|OY|UE|KS|SQ)[U|S][0-9A-Z]{3,}\b|^HDR\+\s+\d|^MediaTek Camera Application$|^Digital Camera\b/i;
 
 /* Dual 32-bit FNV-1a / Murmur-inspired hash -> 16-hex-digit (64-bit) signature ID:
  *   a_{k} = ((a_{k-1} XOR c_k) * 0x01000193) mod 2^32
@@ -290,7 +291,7 @@ function ijgMatch(dqt) {
   return null;
 }
 
-function editTraces(j, es) {
+function editTraces(j, es, sw = '') {
   const t = [];
   if (j.photoshop) t.push('Photoshop resource block (APP13 "Photoshop 3.0" / 8BIM)');
   if (j.adobe) t.push('Adobe APP14 marker');
@@ -299,7 +300,8 @@ function editTraces(j, es) {
   const c = x.match(/CreatorTool(?:>|=")([^<"]+)/i);
   if (c && EDITORS.test(c[1])) t.push('XMP CreatorTool: ' + c[1].trim());
   const q = ijgMatch(j.dqt);
-  if (q && !(es && es.makerNote)) t.push('Quantization tables exactly equal IJG standard Q' + q + ' (libjpeg-style encoder)');
+  const hwCam = Boolean((es && es.makerNote) || (q && q < 100 && ((es && es.counts && es.counts[1] >= 25 && es.counts[2] > 0 && es.thumb !== null) || CAMERA_FW.test(sw || ''))));
+  if (q && !hwCam) t.push('Quantization tables exactly equal IJG standard Q' + q + ' (libjpeg-style encoder)');
   return t;
 }
 
@@ -410,7 +412,7 @@ const CAT_CLASS = { unique: 'ok', same: 'warn', multi: 'bad' };
 /* Export to globalThis for Node.js build/test scripts while remaining plain browser globals */
 if (typeof globalThis !== 'undefined') {
   Object.assign(globalThis, {
-    ZZ, EDITORS, hash, HUFF_LABELS, huffSets, huffVector, huffInfo, huffRows,
+    ZZ, EDITORS, CAMERA_FW, hash, HUFF_LABELS, huffSets, huffVector, huffInfo, huffRows,
     parseJpeg, pad, dqt192, sigParts, sigVector, fullKeyOf, exifStruct, thumbSigOf,
     FLICKR_SIZES, isFlickrResize, STD_LUM, STD_CHR, scaleQ, SOFTWARE_BASELINES,
     ijgMatch, editTraces, NEAR, CLOSE, dqtDist, simPct, estimateQuality, qualityText,

@@ -96,7 +96,15 @@ const SAMSUNG_MODELS = {
   'SM-A536E': 'Galaxy A53 5G (SM-A536E)',
   'SM-A528B': 'Galaxy A52s 5G (SM-A528B)',
   'SM-A356E': 'Galaxy A35 5G (SM-A356E)',
-  'SM-A346E': 'Galaxy A34 5G (SM-A346E)'
+  'SM-A346E': 'Galaxy A34 5G (SM-A346E)',
+  'SM-A566B': 'Galaxy A56 5G (SM-A566B)',
+  'SM-A066B': 'Galaxy A06 5G (SM-A066B)'
+};
+const DEVICE_CODE_MODELS = {
+  'M2103K19G': 'Redmi Note 10 5G (M2103K19G)',
+  '23049PCD8G': 'POCO F5 (23049PCD8G)',
+  '21061110AG': '11T (21061110AG)',
+  'V2149': 'Y35 (V2149)'
 };
 function normMake(m) {
   m = (m || '').trim().replace(/\b(corporation|corp\.?|company|co\.?|inc\.?|ltd\.?|limited|electronics|imaging|digital)\b/gi, '').replace(/[,.]/g, '').trim();
@@ -107,6 +115,7 @@ function normModel(model, make, software = '') {
   let m = (model || '').trim();
   let mk = normMake(make);
   if (mk && m.toUpperCase().startsWith(mk)) m = m.slice(mk.length).trim();
+  if (DEVICE_CODE_MODELS[m.toUpperCase()]) return DEVICE_CODE_MODELS[m.toUpperCase()];
   // Extract Samsung SM-XXXX code from model or firmware string (e.g. N985FXXSIHYH3 -> SM-N985F)
   const smMatch = m.toUpperCase().match(/^SM-([A-Z]\d{3}[A-Z0-9]*)/);
   const fwMatch = String(software || '').toUpperCase().match(/\b([A-Z]\d{3}[A-Z]{1,2})(?:XX|DX|ZS|OY|UE|KS)[U|S][0-9A-Z]{3,}\b/);
@@ -320,7 +329,7 @@ async function analyze(name, buf, size) {
   };
   item.rec.fullKey = fullKeyOf(item.rec);
   item.edited = EDITORS.test(tool);
-  const traces = editTraces(j, es);
+  const traces = editTraces(j, es, tool);
   if (!j.dqtKey) { item.status = 'rejected'; item.reason = 'No DQT tables found'; }
   else if (item.edited) { item.status = 'rejected'; item.reason = 'Edited with third-party software: ' + tool; }
   else if (traces.length) { item.status = 'rejected'; item.edited = true; item.reason = 'Edit traces without a Software tag: ' + traces.join('; '); }

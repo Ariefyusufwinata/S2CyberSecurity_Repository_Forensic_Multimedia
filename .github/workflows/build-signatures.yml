@@ -1,0 +1,37 @@
+name: Rebuild Forensic Signatures Index
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'images/**'
+      - 'tools/build-signatures.js'
+      - 'huffman.js'
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild-index:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run Forensic Signature Curation Builder
+        run: node tools/build-signatures.js
+
+      - name: Commit updated signatures.json & dataset.js
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if [[ -n $(git status --porcelain signatures.json dataset.js) ]]; then
+            git add signatures.json dataset.js
+            git commit -m "chore(dataset): auto-rebuild forensic signatures index [skip ci]"
+            git push
+          fi

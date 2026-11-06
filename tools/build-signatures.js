@@ -27,11 +27,25 @@ function stripExifApp1(u8) {
   return Buffer.concat(chunks);
 }
 (async () => {
+  const sigPath = path.join(__dirname, '../signatures.json');
+  const prevThumb = new Map();
+  if (fs.existsSync(sigPath)) {
+    try {
+      const prev = JSON.parse(fs.readFileSync(sigPath, 'utf8'));
+      for (const s of (prev.samples || [])) {
+        if (s.file && s.thumb && s.thumbSrc === 'GENERATED_COLOR_ROTATED') {
+          prevThumb.set(s.file + '|' + s.size + '|' + (s.orientationDeg || 0), s.thumb);
+        }
+      }
+    } catch (e) {}
+  }
+
   const root = path.join(__dirname, '../images'), out = [], rej = [];
   for (const f of walk(root).sort()) {
     const b = fs.readFileSync(f);
-    const it = await analyze(path.relative(path.join(__dirname, '..'), f), b.buffer.slice(b.byteOffset, b.byteOffset + b.length), b.length);
-    if (it.rec) {
+    const rel = path.relative(path.join(__dirname, '..'), f);
+    const it = await analyze(rel, b.buffer.slice(b.byteOffset, b.byteOffset + b.length), b.length);
+    if (it.rec && it.status === 'accepted') {
       const ori = (it.rec.exif && (it.rec.exif['Orientation'] || it.rec.exif['Orientasi'])) || '';
       const oInfo = parseOrientation(ori, it.rec.width, it.rec.height);
       it.rec.orientationNum = oInfo.num;
@@ -47,25 +61,31 @@ function stripExifApp1(u8) {
       it.rec.displayHeight = it.rec.isPortrait && rawW > rawH ? rawW : rawH;
       it.rec.displayDim = it.rec.displayWidth + ' × ' + it.rec.displayHeight;
 
-      // Ensure full-color RGB preview rotated upright
-      const tmp = '/tmp/_prev.jpg';
-      const sipsArgs = ['-Z', '360', '-s', 'formatOptions', '80'];
-      if (oInfo.deg !== 0) sipsArgs.push('-r', String(oInfo.deg));
-      sipsArgs.push(f, '--out', tmp);
-      try {
-        require('child_process').execFileSync('sips', sipsArgs, { stdio: 'ignore' });
-        it.rec.thumb = 'data:image/jpeg;base64,' + stripExifApp1(fs.readFileSync(tmp)).toString('base64');
+      const cacheKey = rel + '|' + b.length + '|' + oInfo.deg;
+      if (prevThumb.has(cacheKey)) {
+        it.rec.thumb = prevThumb.get(cacheKey);
         it.rec.thumbSrc = 'GENERATED_COLOR_ROTATED';
-      } catch (e) {}
+      } else {
+        // Ensure full-color RGB preview rotated upright
+        const tmp = '/tmp/_prev.jpg';
+        const sipsArgs = ['-Z', '360', '-s', 'formatOptions', '80'];
+        if (oInfo.deg !== 0) sipsArgs.push('-r', String(oInfo.deg));
+        sipsArgs.push(f, '--out', tmp);
+        try {
+          require('child_process').execFileSync('sips', sipsArgs, { stdio: 'ignore' });
+          it.rec.thumb = 'data:image/jpeg;base64,' + stripExifApp1(fs.readFileSync(tmp)).toString('base64');
+          it.rec.thumbSrc = 'GENERATED_COLOR_ROTATED';
+        } catch (e) {}
+      }
       it.rec.bundled = true;
     }
     (it.status === 'accepted' ? out : rej).push(it.status === 'accepted' ? it.rec : it);
   }
   const seen = new Set(), samples = out.filter(s => !seen.has(s.id) && seen.add(s.id));
-  fs.writeFileSync(path.join(__dirname, '../signatures.json'), JSON.stringify({ format: 'jpeg-signature-repository', version: 1, build: Date.now(), samples }));
-  fs.writeFileSync(path.join(__dirname, '../dataset.js'), 'window.DEFAULT_SIGNATURES = ' + fs.readFileSync(path.join(__dirname, '../signatures.json'), 'utf8') + ';\n');
-  console.log('Accepted:', samples.length, 'Rejected:', rej.length);
-  rej.slice(0, 5).forEach(r => console.log(' -', r.name, r.reason));
+  fs.writeFileSync(sigPath, JSON.stringify({ format: 'jpeg-signature-repository', version: 1, build: Date.now(), samples }));
+  fs.writeFileSync(path.join(__dirname, '../dataset.js'), 'window.DEFAULT_SIGNATURES = ' + fs.readFileSync(sigPath, 'utf8') + ';\n');
+  console.log('Accepted (unique):', samples.length, '| Accepted (files):', out.length, '| Rejected (edited/invalid):', rej.length);
+  rej.slice(0, 10).forEach(r => console.log(' - [REJECTED]', r.name, '->', r.reason));
   const g = {}; samples.forEach(s => (g[s.device + ' | ' + s.dqtKey] = (g[s.device + ' | ' + s.dqtKey] || 0) + 1));
   console.log(g);
 })();
