@@ -74,8 +74,13 @@ function printCliReport(res, showMatrix = false) {
 
   // Duplicate Check against catalog
   if (res.duplicate && res.duplicate.isDuplicate) {
-    console.log(`\n${c.bgYellow}${c.bold} ℹ️  CATALOG DUPLICATE DETECTED ${c.reset}`);
-    console.log(`   ${c.yellow}EXIF checksum matches existing sample in database: ${c.bold}${res.duplicate.duplicateOf}${c.reset}`);
+    if (res.duplicate.isExactSameFile) {
+      console.log(`\n${c.bgBlue}${c.bold} ℹ️  CATALOG BASELINE SAMPLE ${c.reset}`);
+      console.log(`   ${c.cyan}This file is a registered baseline sample in the reference catalog.${c.reset}`);
+    } else {
+      console.log(`\n${c.bgYellow}${c.bold} ⚠️  CATALOG DUPLICATE DETECTED ${c.reset}`);
+      console.log(`   ${c.yellow}EXIF checksum matches existing sample in database: ${c.bold}${res.duplicate.duplicateOf}${c.reset}`);
+    }
   }
 
   // Anti-Tampering Check

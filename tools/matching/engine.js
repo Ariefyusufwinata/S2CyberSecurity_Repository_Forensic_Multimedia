@@ -1,4 +1,10 @@
 'use strict';
+/* ============================================================================
+ * tools/matching/engine.js — Standalone Forensic Signature Matching Engine
+ * Reference: Eric Kee, Micah K. Johnson & Hany Farid,
+ *            "Digital Image Authentication from JPEG Headers",
+ *            IEEE Transactions on Information Forensics and Security, 2011.
+ * ============================================================================ */
 
 const fs = require('fs');
 const path = require('path');
@@ -364,6 +370,8 @@ function matchRecord(qRec, rawAnalysis, catalogSamples) {
 
   const ijg = ijgMatch(j.dqt);
   const dupMatch = samples.find(s => (s.exifChecksum && s.exifChecksum === qRec.exifChecksum) || s.id === qRec.id);
+  const normFile = p => (p || '').replace(/\\/g, '/');
+  const isExactSameFile = Boolean(dupMatch && normFile(dupMatch.file || dupMatch.id) === normFile(qRec.file || qRec.id));
 
   return {
     valid: true,
@@ -371,6 +379,8 @@ function matchRecord(qRec, rawAnalysis, catalogSamples) {
     size: qRec.size,
     duplicate: {
       isDuplicate: Boolean(dupMatch),
+      isExactSameFile,
+      isDuplicateOfOther: Boolean(dupMatch && !isExactSameFile),
       duplicateOf: dupMatch ? (dupMatch.file || dupMatch.id) : null,
       exifChecksum: qRec.exifChecksum
     },

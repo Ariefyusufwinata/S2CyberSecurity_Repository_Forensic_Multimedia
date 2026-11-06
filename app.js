@@ -1034,7 +1034,16 @@ async function importJson(file) {
     const arr = Array.isArray(d) ? d : d.samples;
     if (!Array.isArray(arr) || arr.some(s => !s.id || !s.dqtKey || !s.dqt)) throw new Error('Invalid signature format');
     const ids = new Set(samples.map(s => s.id));
-    const fresh = arr.filter(s => !ids.has(s.id));
+    const exSet = new Set(samples.map(s => s.exifChecksum || s.exifHash).filter(Boolean));
+    const fresh = [];
+    arr.forEach(s => {
+      const chk = s.exifChecksum || s.exifHash;
+      if (!ids.has(s.id) && (!chk || !exSet.has(chk))) {
+        ids.add(s.id);
+        if (chk) exSet.add(chk);
+        fresh.push(s);
+      }
+    });
     await DB.putMany(fresh); samples = samples.concat(fresh); renderAll();
     toast(`Import: ${fresh.length} new samples (${arr.length - fresh.length} duplicates skipped)`);
   } catch (e) { toast('Import failed: ' + e.message); }
