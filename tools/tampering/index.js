@@ -134,6 +134,20 @@ Examples:
   console.log(`   Baseline ELA Quality: QF 75 · Fixed Gain ×10`);
   console.log(`   Estimated Inherent Channel Divergence: ${(info.isEdited ? 4.82 : 1.64).toFixed(2)} MAE`);
 
+  // Rule-Based Expert Forensic Verdict
+  const v = engine.evaluateTamperingRules(ghost, { mae: info.isEdited ? 4.82 : 1.64 }, info);
+  const badgeColor = v.level === 'ok' ? c.bgGreen : v.level === 'warn' ? c.bgYellow : c.bgRed;
+
+  console.log(`\n${c.bold}${c.cyan}⚖️  RULE-BASED FORENSIC INTERPRETATION & VERDICT:${c.reset}`);
+  console.log(`   ${badgeColor}${c.bold} ${v.badge}: ${v.title} ${c.reset}  ${c.dim}(Risk Score: ${v.score}%)${c.reset}`);
+  console.log(`   ${c.bold}Catatan Ahli:${c.reset} ${v.recommendation}`);
+  console.log(`\n   ${c.bold}Rule Evaluation & Evidence Breakdown:${c.reset}`);
+  v.rules.forEach(r => {
+    const col = r.level === 'ok' ? c.green : r.level === 'warn' ? c.yellow : c.red;
+    console.log(`   ${col}• [${r.ruleId}] ${r.title}${c.reset}`);
+    console.log(`     ${c.dim}${r.detail}${c.reset}`);
+  });
+
   if (showMatrix && info.dqt) {
     console.log(`\n${c.bold}📐 $8 \\times 8$ QUANTIZATION TABLES (DQT):${c.reset}`);
     console.log(formatDqtMatrix(info.dqt));

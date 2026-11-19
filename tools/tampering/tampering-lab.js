@@ -796,6 +796,7 @@
     });
 
     $('#ghostResultSection').style.display = 'block';
+    renderInterpretation();
   }
 
   /* ---------------- Step 03: Error Level Analysis (ELA) ---------------- */
@@ -878,6 +879,7 @@
     $('#elaMapPrev').src = state.ela.elaUrl;
     $('#elaSubtitle').textContent = `QF ${elaQf} · Fixed gain ×${gain} · MAE ${mae}`;
     $('#elaClippingText').textContent = `Clipping setelah gain: ${clipPct}% nilai channel.`;
+    renderInterpretation();
   }
 
   /* ---------------- SVG Charts ---------------- */
@@ -988,6 +990,149 @@
   async function runForensicPreview() {
     await runJpegGhost();
     await runEla();
+    renderInterpretation();
+  }
+
+  /* ---------------- Rule-Based Forensic Interpretation Engine ---------------- */
+  function evaluateTamperingRules() {
+    const ghost = state.ghost;
+    const ela = state.ela;
+    const roi = state.roi;
+    const rules = [];
+    let score = 0;
+
+    // 1. JPEG Ghost Rule
+    const minima = ghost.localMinima || [];
+    const finalQ = roi.finalQf || 85;
+    const donorMinima = minima.filter(q => Math.abs(q - finalQ) >= 5);
+
+    if (donorMinima.length > 0) {
+      score += 45;
+      rules.push({
+        ruleId: 'GHOST-01',
+        level: 'bad',
+        title: `Prior Compression Discrepancy (Donor QF ≈ ${donorMinima.join(', ')})`,
+        detail: `Terdeteksi local error minimum yang jelas pada QF ${donorMinima.join(', ')} (berbeda dari QF kontainer ${finalQ}). Hal ini membuktikan area donor sebelumnya pernah dikompresi pada kualitas ~QF ${donorMinima[0]} sebelum ditempel (Farid 2009, Persamaan 4).`
+      });
+    } else if (minima.length === 0) {
+      rules.push({
+        ruleId: 'GHOST-02',
+        level: 'ok',
+        title: 'Monotonic Error Curve (No Ghost Discrepancy)',
+        detail: 'Kurva error menurun secara monoton menuju kuantisasi kontainer tanpa ada minimum sekunder. Profil kompresi homogen.'
+      });
+    }
+
+    // 2. Kolmogorov-Smirnov Divergence Rule
+    const ksList = (ghost && ghost.curves && ghost.curves.ks) || [0];
+    const maxKs = Math.max(...ksList, 0);
+    if (maxKs >= 0.40) {
+      score += 25;
+      rules.push({
+        ruleId: 'KS-01',
+        level: 'bad',
+        title: `High Distribution Divergence (D_KS = ${maxKs.toFixed(4)})`,
+        detail: `Divergensi statistik blok ROI vs Background sangat tinggi (D_KS = ${maxKs.toFixed(4)} >= 0.40). Distribusi error blok membuktikan kedua area berasal dari distribusi kompresi berbeda.`
+      });
+    } else if (maxKs >= 0.20) {
+      score += 15;
+      rules.push({
+        ruleId: 'KS-02',
+        level: 'warn',
+        title: `Moderate Distribution Divergence (D_KS = ${maxKs.toFixed(4)})`,
+        detail: `Divergensi statistik sedang (0.20 <= D_KS < 0.40). Kemungkinan akibat variasi kontras tekstur lokal atau re-kompresi ringan.`
+      });
+    } else {
+      rules.push({
+        ruleId: 'KS-03',
+        level: 'ok',
+        title: `Consistent Block Distribution (D_KS = ${maxKs.toFixed(4)})`,
+        detail: 'Divergensi statistik rendah (D_KS < 0.20). Karakteristik statistik error blok konsisten di seluruh citra.'
+      });
+    }
+
+    // 3. Error Level Analysis (ELA) Rule
+    const mae = parseFloat(ela.mae || 0);
+    const clip = parseFloat(ela.clippingPct || 0);
+    if (mae >= 3.8 || clip >= 0.5) {
+      score += 20;
+      rules.push({
+        ruleId: 'ELA-01',
+        level: 'bad',
+        title: `Elevated High-Frequency Residuals (MAE = ${mae.toFixed(2)}, Clipping = ${clip.toFixed(2)}%)`,
+        detail: `Residu error kompresi melampaui batas normal. Tepi sambungan atau objek tempelan memicu lonjakan selisih frekuensi tinggi terhadap area sekitarnya.`
+      });
+    } else if (mae >= 2.4) {
+      score += 10;
+      rules.push({
+        ruleId: 'ELA-02',
+        level: 'warn',
+        title: `Moderate Error Activity (MAE = ${mae.toFixed(2)})`,
+        detail: `Tingkat error residu sedang. Perhatikan disparitas tekstur: tepi berkontras tinggi secara alami menunjukkan kecerahan ELA lebih tinggi dibanding bidang halus.`
+      });
+    } else if (mae > 0) {
+      rules.push({
+        ruleId: 'ELA-03',
+        level: 'ok',
+        title: `Low Baseline Residuals (MAE = ${mae.toFixed(2)})`,
+        detail: 'Residu dekompresi merata dengan amplitudo rendah di seluruh bidang citra.'
+      });
+    }
+
+    // 4. Final Verdict Synthesis
+    let level, badge, title, recommendation;
+    if (score >= 60) {
+      level = 'bad';
+      badge = 'TAMPERING CONFIRMED';
+      title = 'STRONG EVIDENCE OF IMAGE SPLICING & MANIPULATION';
+      recommendation = 'Terdeteksi anomali ganda signifikan (local minimum JPEG Ghost pada QF berbeda, divergensi K-S tinggi, dan/atau residu ELA asimetris). Citra ini hampir pasti merupakan hasil splicing (tempelan dari dua sumber JPEG berbeda).';
+    } else if (score >= 30) {
+      level = 'warn';
+      badge = 'SUSPICIOUS ANOMALY';
+      title = 'COMPRESSION IRREGULARITY DETECTED';
+      recommendation = 'Terdeteksi ketidakteraturan pada kurva kompresi atau residu ELA. Kemungkinan terdapat manipulasi lokal, modifikasi grafis parsial, atau perbedaan tekstur ekstrem pada area yang diuji.';
+    } else {
+      level = 'ok';
+      badge = 'CONSISTENT';
+      title = 'CONSISTENT COMPRESSION PROFILE';
+      recommendation = 'Karakteristik kompresi citra homogen di seluruh area. Tidak ditemukan indikasi ghost kompresi donor maupun anomali residu frekuensi tinggi.';
+    }
+
+    return {
+      score: Math.min(100, score),
+      level,
+      badge,
+      title,
+      recommendation,
+      rules
+    };
+  }
+
+  function renderInterpretation() {
+    const v = evaluateTamperingRules();
+    const sec = $('#ruleInterpretationSection');
+    if (!sec) return;
+
+    sec.style.display = 'block';
+    const alert = $('#ruleVerdictAlert');
+    alert.className = `alert ${v.level}`;
+    const badge = $('#ruleVerdictBadge');
+    badge.className = `badge ${v.level}`;
+    badge.textContent = v.badge;
+    $('#ruleRiskScore').textContent = `Tampering Probability: ${v.score}%`;
+    $('#ruleVerdictTitle').textContent = v.title;
+    $('#ruleVerdictRec').textContent = v.recommendation;
+
+    const list = $('#ruleEvaluationList');
+    list.innerHTML = v.rules.map(r => `
+      <div class="lab-rule-item">
+        <div class="lab-rule-head">
+          <span class="badge ${r.level}">[${r.ruleId}]</span>
+          <span>${r.title}</span>
+        </div>
+        <div class="lab-rule-detail">${r.detail}</div>
+      </div>
+    `).join('');
   }
 
   /* ---------------- Experiment ZIP Export ---------------- */
