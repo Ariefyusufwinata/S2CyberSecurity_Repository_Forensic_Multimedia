@@ -443,6 +443,44 @@ const bufferResult = matchBuffer('evidence.jpg', buf);
 
 ---
 
+## 🛠️ Standalone CLI Forensic Tampering Tool (`tools/tampering`)
+
+The compression forensics and tampering analysis engine is cleanly separated into a standalone command-line forensic tool located under [`tools/tampering/`](tools/tampering/) and executable via `tools/tampering` or `tools/tampering.js`.
+
+### 1. Command-Line Usage (CLI)
+
+Analyze tampering traces, estimate DQT quality factors, and simulate JPEG Ghost curves directly from the terminal:
+
+```bash
+# Basic tampering inspection & JPEG Ghost curve analysis:
+node tools/tampering "images/DATASET INDAH/DSC_0803.JPG"
+
+# Inspect suspected edited/tampered image:
+node tools/tampering "images/Dataset Husni/Process_File Only_-_DSCF1027.jpg"
+
+# Output full tampering analysis in JSON format:
+node tools/tampering "images/DATASET INDAH/MEITU_20260410_225449421.jpg" --json
+
+# With full 8x8 Quantization Tables (DQT) printed in terminal:
+node tools/tampering "images/DATASET INDAH/DSC_0803.JPG" --matrix
+```
+
+### 2. Programmatic Node.js Module API
+
+```javascript
+const { inspectJpeg, computeGhostMetrics } = require('./tools/tampering');
+
+const buf = fs.readFileSync('evidence.jpg');
+const info = inspectJpeg(buf);
+console.log('Estimated Q:', info.estimatedQuality);
+console.log('Tampering traces:', info.traces);
+
+const ghost = computeGhostMetrics(info.dqt);
+console.log('Detected local minima:', ghost.localMinima);
+```
+
+---
+
 ## 🧪 Tampering Analysis Lab (JPEG Ghost & Error Level Analysis)
 
 A dedicated, interactive compression forensics simulation workspace based on **JPEG Ghost** (*Hany Farid, "Exposing Digital Forgeries from JPEG Ghosts", IEEE Transactions on Information Forensics and Security, 2009*) and **Error Level Analysis (ELA)** (*Krawetz 2007*).
