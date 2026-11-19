@@ -364,9 +364,9 @@
     if (!state.donor.decodedImg) {
       canvas.width = 400;
       canvas.height = 300;
-      ctx.fillStyle = '#0d1428';
+      ctx.fillStyle = '#09090b';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#8a98c0';
+      ctx.fillStyle = '#a1a1aa';
       ctx.font = '14px system-ui';
       ctx.textAlign = 'center';
       ctx.fillText('Select Counterpart Donor in Step 01', canvas.width / 2, canvas.height / 2);
@@ -377,21 +377,16 @@
     canvas.height = state.donor.height;
     ctx.drawImage(state.donor.decodedImg, 0, 0);
 
-    // Dim outside region
-    ctx.fillStyle = '#070b17';
-    ctx.save();
-    // Darken overlay
-    ctx.globalCompositeOperation = 'source-over';
-    // Solid fill outer boundaries without transparency: draw 4 surrounding rects with hatch or dark solid
     const { dx, dy, dw, dh } = state.roi;
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = '#fcd34d'; // Yellow dashed border
+    ctx.save();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#fde047'; // Solid amber dashed border
     ctx.setLineDash([8, 8]);
     ctx.strokeRect(dx, dy, dw, dh);
 
     // Corner grab markers
     ctx.setLineDash([]);
-    ctx.fillStyle = '#2a4fc0';
+    ctx.fillStyle = '#3b82f6';
     const s = 10;
     ctx.fillRect(dx - s / 2, dy - s / 2, s, s);
     ctx.fillRect(dx + dw - s / 2, dy - s / 2, s, s);
@@ -406,9 +401,9 @@
     if (!state.target.decodedImg) {
       canvas.width = 400;
       canvas.height = 300;
-      ctx.fillStyle = '#0d1428';
+      ctx.fillStyle = '#09090b';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#8a98c0';
+      ctx.fillStyle = '#a1a1aa';
       ctx.font = '14px system-ui';
       ctx.textAlign = 'center';
       ctx.fillText('Select Target Image in Step 01', canvas.width / 2, canvas.height / 2);
@@ -425,18 +420,18 @@
       ctx.drawImage(state.donor.decodedImg, dx, dy, dw, dh, tx, ty, dw, dh);
 
       // Placement border
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = '#7ba5ff';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#3b82f6';
       ctx.setLineDash([6, 6]);
       ctx.strokeRect(tx, ty, dw, dh);
       ctx.setLineDash([]);
 
-      // Label
-      ctx.fillStyle = '#1e3a8a';
-      ctx.fillRect(tx, Math.max(0, ty - 24), 160, 22);
-      ctx.fillStyle = '#ffffff';
+      // Solid Badge Label
+      ctx.fillStyle = '#18181b';
+      ctx.fillRect(tx, Math.max(0, ty - 22), 160, 20);
+      ctx.fillStyle = '#fafafa';
       ctx.font = 'bold 11px system-ui';
-      ctx.fillText(`Pasted ROI: ${dw}×${dh}`, tx + 6, Math.max(16, ty - 8));
+      ctx.fillText(`Pasted ROI: ${dw}×${dh}`, tx + 6, Math.max(14, ty - 7));
     }
   }
 
@@ -912,26 +907,26 @@
     const svg = `
       <svg viewBox="0 0 ${W} ${H}" class="lab-chart-svg">
         <!-- Axes -->
-        <line x1="${padL}" y1="${padT + plotH}" x2="${W - padR}" y2="${padT + plotH}" stroke="#1f2e57" stroke-width="1.5" />
-        <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + plotH}" stroke="#1f2e57" stroke-width="1.5" />
+        <line x1="${padL}" y1="${padT + plotH}" x2="${W - padR}" y2="${padT + plotH}" stroke="#27272a" stroke-width="1.5" />
+        <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + plotH}" stroke="#27272a" stroke-width="1.5" />
         
         <!-- Y Grid Lines -->
-        <line x1="${padL}" y1="${padT}" x2="${W - padR}" y2="${padT}" stroke="#131d3a" stroke-dasharray="3,3" />
-        <line x1="${padL}" y1="${padT + plotH / 2}" x2="${W - padR}" y2="${padT + plotH / 2}" stroke="#131d3a" stroke-dasharray="3,3" />
-        <text x="${padL - 8}" y="${padT + 4}" fill="#8a98c0" font-size="10" text-anchor="end">${maxVal.toFixed(1)}</text>
-        <text x="${padL - 8}" y="${padT + plotH / 2 + 3}" fill="#8a98c0" font-size="10" text-anchor="end">${(maxVal / 2).toFixed(1)}</text>
-        <text x="${padL - 8}" y="${padT + plotH}" fill="#8a98c0" font-size="10" text-anchor="end">0.0</text>
+        <line x1="${padL}" y1="${padT}" x2="${W - padR}" y2="${padT}" stroke="#18181b" stroke-dasharray="3,3" />
+        <line x1="${padL}" y1="${padT + plotH / 2}" x2="${W - padR}" y2="${padT + plotH / 2}" stroke="#18181b" stroke-dasharray="3,3" />
+        <text x="${padL - 8}" y="${padT + 4}" fill="#a1a1aa" font-size="10" text-anchor="end">${maxVal.toFixed(1)}</text>
+        <text x="${padL - 8}" y="${padT + plotH / 2 + 3}" fill="#a1a1aa" font-size="10" text-anchor="end">${(maxVal / 2).toFixed(1)}</text>
+        <text x="${padL - 8}" y="${padT + plotH}" fill="#a1a1aa" font-size="10" text-anchor="end">0.0</text>
         
         <!-- X Axis Labels -->
-        <text x="${padL}" y="${H - 12}" fill="#8a98c0" font-size="11" text-anchor="start">${qf[0]}</text>
-        <text x="${padL + plotW / 2}" y="${H - 12}" fill="#8a98c0" font-size="11" text-anchor="middle">${qf[Math.floor(qf.length / 2)]}</text>
-        <text x="${W - padR}" y="${H - 12}" fill="#8a98c0" font-size="11" text-anchor="end">${qf[qf.length - 1]}</text>
-        <text x="${padL + plotW / 2}" y="${H - 2}" fill="#8a98c0" font-size="11" text-anchor="middle">JPEG quality factor</text>
+        <text x="${padL}" y="${H - 12}" fill="#a1a1aa" font-size="11" text-anchor="start">${qf[0]}</text>
+        <text x="${padL + plotW / 2}" y="${H - 12}" fill="#a1a1aa" font-size="11" text-anchor="middle">${qf[Math.floor(qf.length / 2)]}</text>
+        <text x="${W - padR}" y="${H - 12}" fill="#a1a1aa" font-size="11" text-anchor="end">${qf[qf.length - 1]}</text>
+        <text x="${padL + plotW / 2}" y="${H - 2}" fill="#a1a1aa" font-size="11" text-anchor="middle">JPEG quality factor</text>
 
         <!-- Curves -->
         <polyline fill="none" stroke="#21918c" stroke-width="2.5" points="${ptsMse}" />
         <polyline fill="none" stroke="#d97706" stroke-width="2.5" points="${ptsRoi}" />
-        <polyline fill="none" stroke="#8a98c0" stroke-width="1.5" stroke-dasharray="4,2" points="${ptsOut}" />
+        <polyline fill="none" stroke="#a1a1aa" stroke-width="1.5" stroke-dasharray="4,2" points="${ptsOut}" />
 
         <!-- Data markers on ROI line -->
         ${qf.map((q, i) => `<circle cx="${getX(q)}" cy="${getY(roiMse[i])}" r="3" fill="#d97706" />`).join('')}
@@ -957,28 +952,28 @@
     const svg = `
       <svg viewBox="0 0 ${W} ${H}" class="lab-chart-svg">
         <!-- Axes -->
-        <line x1="${padL}" y1="${padT + plotH}" x2="${W - padR}" y2="${padT + plotH}" stroke="#1f2e57" stroke-width="1.5" />
-        <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + plotH}" stroke="#1f2e57" stroke-width="1.5" />
+        <line x1="${padL}" y1="${padT + plotH}" x2="${W - padR}" y2="${padT + plotH}" stroke="#27272a" stroke-width="1.5" />
+        <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + plotH}" stroke="#27272a" stroke-width="1.5" />
 
         <!-- Grid Lines -->
-        <line x1="${padL}" y1="${padT}" x2="${W - padR}" y2="${padT}" stroke="#131d3a" stroke-dasharray="3,3" />
-        <line x1="${padL}" y1="${padT + plotH * 0.25}" x2="${W - padR}" y2="${padT + plotH * 0.25}" stroke="#131d3a" stroke-dasharray="3,3" />
-        <line x1="${padL}" y1="${padT + plotH * 0.5}" x2="${W - padR}" y2="${padT + plotH * 0.5}" stroke="#131d3a" stroke-dasharray="3,3" />
-        <line x1="${padL}" y1="${padT + plotH * 0.75}" x2="${W - padR}" y2="${padT + plotH * 0.75}" stroke="#131d3a" stroke-dasharray="3,3" />
+        <line x1="${padL}" y1="${padT}" x2="${W - padR}" y2="${padT}" stroke="#18181b" stroke-dasharray="3,3" />
+        <line x1="${padL}" y1="${padT + plotH * 0.25}" x2="${W - padR}" y2="${padT + plotH * 0.25}" stroke="#18181b" stroke-dasharray="3,3" />
+        <line x1="${padL}" y1="${padT + plotH * 0.5}" x2="${W - padR}" y2="${padT + plotH * 0.5}" stroke="#18181b" stroke-dasharray="3,3" />
+        <line x1="${padL}" y1="${padT + plotH * 0.75}" x2="${W - padR}" y2="${padT + plotH * 0.75}" stroke="#18181b" stroke-dasharray="3,3" />
         
-        <text x="${padL - 8}" y="${padT + 4}" fill="#8a98c0" font-size="10" text-anchor="end">1.00</text>
-        <text x="${padL - 8}" y="${padT + plotH * 0.5 + 3}" fill="#8a98c0" font-size="10" text-anchor="end">0.50</text>
-        <text x="${padL - 8}" y="${padT + plotH}" fill="#8a98c0" font-size="10" text-anchor="end">0.00</text>
+        <text x="${padL - 8}" y="${padT + 4}" fill="#a1a1aa" font-size="10" text-anchor="end">1.00</text>
+        <text x="${padL - 8}" y="${padT + plotH * 0.5 + 3}" fill="#a1a1aa" font-size="10" text-anchor="end">0.50</text>
+        <text x="${padL - 8}" y="${padT + plotH}" fill="#a1a1aa" font-size="10" text-anchor="end">0.00</text>
 
         <!-- X Axis Labels -->
-        <text x="${padL}" y="${H - 12}" fill="#8a98c0" font-size="11" text-anchor="start">${qf[0]}</text>
-        <text x="${padL + plotW / 2}" y="${H - 12}" fill="#8a98c0" font-size="11" text-anchor="middle">${qf[Math.floor(qf.length / 2)]}</text>
-        <text x="${W - padR}" y="${H - 12}" fill="#8a98c0" font-size="11" text-anchor="end">${qf[qf.length - 1]}</text>
-        <text x="${padL + plotW / 2}" y="${H - 2}" fill="#8a98c0" font-size="11" text-anchor="middle">JPEG quality factor</text>
+        <text x="${padL}" y="${H - 12}" fill="#a1a1aa" font-size="11" text-anchor="start">${qf[0]}</text>
+        <text x="${padL + plotW / 2}" y="${H - 12}" fill="#a1a1aa" font-size="11" text-anchor="middle">${qf[Math.floor(qf.length / 2)]}</text>
+        <text x="${W - padR}" y="${H - 12}" fill="#a1a1aa" font-size="11" text-anchor="end">${qf[qf.length - 1]}</text>
+        <text x="${padL + plotW / 2}" y="${H - 2}" fill="#a1a1aa" font-size="11" text-anchor="middle">JPEG quality factor</text>
 
         <!-- Curve -->
-        <polyline fill="none" stroke="#2a4fc0" stroke-width="2.5" points="${ptsKs}" />
-        ${qf.map((q, i) => `<circle cx="${getX(q)}" cy="${getY(ks[i])}" r="3.5" fill="#7ba5ff" />`).join('')}
+        <polyline fill="none" stroke="#3b82f6" stroke-width="2.5" points="${ptsKs}" />
+        ${qf.map((q, i) => `<circle cx="${getX(q)}" cy="${getY(ks[i])}" r="3.5" fill="#60a5fa" />`).join('')}
       </svg>
     `;
 
