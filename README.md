@@ -443,6 +443,44 @@ const bufferResult = matchBuffer('evidence.jpg', buf);
 
 ---
 
+## 🧪 Tampering Analysis Lab (JPEG Ghost & Error Level Analysis)
+
+A dedicated, interactive compression forensics simulation workspace based on **JPEG Ghost** (*Hany Farid, "Exposing Digital Forgeries from JPEG Ghosts", IEEE Transactions on Information Forensics and Security, 2009*) and **Error Level Analysis (ELA)** (*Krawetz 2007*).
+
+The lab provides a step-by-step scientific workflow to simulate and detect image splicing using controlled dual-quality factor re-compression:
+
+```
+[ STEP 01: Controlled Acquisition & Quantization ]
+   Target A (QF 85)   <-- Choose Catalog / Upload
+   Counterpart B (QF 65) <-- Choose Catalog / Upload
+            │
+            ▼
+[ STEP 02: Interactive Sub-Grid Splicing & Placement ]
+   1. Select Donor ROI (dx, dy, dw, dh) on canvas
+   2. Place on Target (tx, ty) with 16px grid alignment snap
+   3. Generate:
+      ├── Tampered Image (Final QF 85)
+      ├── Control Image (Target QF 85 -> 85, no splice)
+      └── Ground-Truth Binary Mask (White = pasted region)
+            │
+            ▼
+[ STEP 03: Forensic Multi-Method Preview ]
+   ├── Multi-QF JPEG Ghost Maps (16 panels: QF 15..90, step 5)
+   │     • Non-overlapping 16x16 block displacement averaging
+   │     • Cross-QF normalization (Farid 2009, Eq. 4) rendered with Viridis colormap
+   │     • Raw MSE curves (mse, roi_mse, outside_mse) & local minima detection
+   │     • ROI vs Background Kolmogorov-Smirnov (K-S) distribution divergence
+   ├── Single-QF Error Level Analysis (ELA QF 75, Gain 10x, MAE & clipping metrics)
+   └── Full Experiment ZIP Export (bundled via JSZip with manifest.json)
+```
+
+### Key Technical Capabilities:
+1. **Dual Source Options:** Use authentic camera samples directly from the 315-image catalog (`images/`) or upload arbitrary lossless/JPEG files.
+2. **Direct Pre-Tampered Photo Analysis:** Instantly analyze external suspect images without going through the synthesis pipeline.
+3. **Reproducible Scientific Output:** Download individual full-resolution PNG heatmaps or export the complete experiment archive (`.zip`) containing all intermediate stages, control images, ground truth masks, and JSON manifest.
+
+---
+
 ## 🌐 Deployment to GitHub Pages
 
 1. Commit and push changes to GitHub:

@@ -29,6 +29,7 @@
     <button data-tab="catalog"><i>☰</i><span>Catalog</span></button>
     <button data-tab="classify"><i>◈</i><span>Classification</span></button>
     <button data-tab="verify"><i>✔</i><span>Verification</span></button>
+    <button data-tab="tampering"><i>🧪</i><span>Tampering Lab</span></button>
     <button data-tab="repo"><i>⚙</i><span>Repository</span></button>
   </nav>
   <main>
@@ -206,6 +207,392 @@
       </div>
     </section>
 
+    <!-- ================= Tampering Analysis Lab Tab ================= -->
+    <section id="tampering" class="tab">
+      <div class="card">
+        <div class="lab-crumb">FORENSIC WORKSPACE / <span>Tampering Analysis Lab</span></div>
+        <div class="lab-title-row">
+          <div class="lab-title-col">
+            <div style="font-size:11px;font-weight:800;letter-spacing:1px;color:var(--accent);margin-bottom:4px">COMPRESSION FORENSICS / EXPERIMENT 01</div>
+            <h1>Tampering Analysis Lab</h1>
+            <p>Simulasi splicing bertahap berdasarkan demonstrasi JPEG Ghost. Pilih sumber, kompresi, tempel, lalu periksa hasilnya.</p>
+          </div>
+          <div class="lab-actions-col">
+            <button class="btn sec" id="btnNewExperiment">New experiment</button>
+            <button class="btn" id="btnExpZip" disabled>&darr; Experiment ZIP</button>
+          </div>
+        </div>
+
+        <div class="lab-steps">
+          <div class="lab-step-pill active" id="pillStep1">
+            <span class="lab-step-num">01</span>
+            <span>Source &amp; convert</span>
+          </div>
+          <div class="lab-step-pill disabled" id="pillStep2">
+            <span class="lab-step-num">02</span>
+            <span>Generate tampered</span>
+          </div>
+          <div class="lab-step-pill disabled" id="pillStep3">
+            <span class="lab-step-num">03</span>
+            <span>Forensic preview</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 01: Source Images & JPEG Conversion -->
+      <div class="card">
+        <div class="lab-step-head">
+          <div>
+            <div class="lab-step-tag">STEP 01</div>
+            <h2 style="margin:2px 0 0">Source images &amp; JPEG conversion</h2>
+          </div>
+          <span class="badge ok">Dual-QF Pipeline</span>
+        </div>
+        <p class="lab-card-sub">Gunakan dua sumber gambar (dari dataset katalog atau upload langsung). Riwayat kompresi dikontrol melalui QF awal masing-masing gambar.</p>
+
+        <div class="lab-grid-2">
+          <!-- Target A -->
+          <div class="lab-source-box">
+            <div class="lab-source-top">
+              <span class="badge navy">TARGET &middot; A</span>
+              <span class="badge warn" style="font-size:12px">QF <b id="tgtQfVal">85</b></span>
+            </div>
+            <div class="small muted" id="tgtInfo" style="margin-bottom:10px">No target image selected</div>
+
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+              <select id="tgtSampleSelect" style="flex:1;min-width:160px">
+                <option value="">-- Choose from Catalog Samples --</option>
+              </select>
+              <label class="btn sec" style="padding:0 14px;min-height:38px;font-size:12.5px">
+                Upload Target
+                <input type="file" id="tgtUploadInput" accept="image/*,.jpg,.jpeg,.png">
+              </label>
+            </div>
+
+            <div style="margin-bottom:12px">
+              <label class="small muted" style="display:flex;justify-content:space-between;margin-bottom:4px">
+                <span>Target Compression Quality (QF)</span>
+                <span>1 &ndash; 100</span>
+              </label>
+              <input type="range" id="tgtQfSlider" min="1" max="100" value="85" style="width:100%;accent-color:var(--navy-hi)">
+            </div>
+
+            <div class="lab-preview-pair">
+              <div class="lab-preview-cell">
+                <span>Source &middot; Original input</span>
+                <div class="lab-preview-frame">
+                  <img id="tgtOrigPreview" alt="Target Original" style="display:none">
+                </div>
+                <span class="mono" id="tgtOrigMeta">-</span>
+              </div>
+              <div class="lab-preview-cell pending" id="tgtJpegBox">
+                <span>JPEG target &middot; Converted</span>
+                <div class="lab-preview-frame">
+                  <img id="tgtJpegPreview" alt="Target JPEG" style="display:none">
+                </div>
+                <span class="mono" id="tgtJpegMeta">Pending conversion</span>
+                <button class="lab-link-btn" id="tgtDownloadBtn" style="display:none;margin-top:4px">&darr; JPEG target</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Counterpart B (Donor) -->
+          <div class="lab-source-box">
+            <div class="lab-source-top">
+              <span class="badge ok">COUNTERPART &middot; B (DONOR)</span>
+              <span class="badge warn" style="font-size:12px">QF <b id="dnrQfVal">65</b></span>
+            </div>
+            <div class="small muted" id="dnrInfo" style="margin-bottom:10px">No donor image selected</div>
+
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+              <select id="dnrSampleSelect" style="flex:1;min-width:160px">
+                <option value="">-- Choose from Catalog Samples --</option>
+              </select>
+              <label class="btn sec" style="padding:0 14px;min-height:38px;font-size:12.5px">
+                Upload Donor
+                <input type="file" id="dnrUploadInput" accept="image/*,.jpg,.jpeg,.png">
+              </label>
+            </div>
+
+            <div style="margin-bottom:12px">
+              <label class="small muted" style="display:flex;justify-content:space-between;margin-bottom:4px">
+                <span>Donor Compression Quality (QF)</span>
+                <span>1 &ndash; 100</span>
+              </label>
+              <input type="range" id="dnrQfSlider" min="1" max="100" value="65" style="width:100%;accent-color:var(--navy-hi)">
+            </div>
+
+            <div class="lab-preview-pair">
+              <div class="lab-preview-cell">
+                <span>Source &middot; Original input</span>
+                <div class="lab-preview-frame">
+                  <img id="dnrOrigPreview" alt="Donor Original" style="display:none">
+                </div>
+                <span class="mono" id="dnrOrigMeta">-</span>
+              </div>
+              <div class="lab-preview-cell pending" id="dnrJpegBox">
+                <span>JPEG counterpart &middot; Converted</span>
+                <div class="lab-preview-frame">
+                  <img id="dnrJpegPreview" alt="Donor JPEG" style="display:none">
+                </div>
+                <span class="mono" id="dnrJpegMeta">Pending conversion</span>
+                <button class="lab-link-btn" id="dnrDownloadBtn" style="display:none;margin-top:4px">&darr; JPEG counterpart</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="small muted" style="line-height:1.6">
+          Kedua gambar dikompresi penuh dan disimpan terpisah. Tahap penempelan berikutnya menggunakan piksel hasil decode JPEG ini, bukan sumber awal.
+        </div>
+      </div>
+
+      <!-- STEP 02: Generate Tampered Image -->
+      <div class="card">
+        <div class="lab-step-head">
+          <div>
+            <div class="lab-step-tag">STEP 02</div>
+            <h2 style="margin:2px 0 0">Generate tampered image</h2>
+          </div>
+          <span class="badge ok">Interactive Splicing</span>
+        </div>
+        <p class="lab-card-sub">Pilih area persegi panjang pada donor, lalu tentukan posisi penempelan pada target.</p>
+
+        <div class="lab-grid-2">
+          <!-- 1. Select Donor Region -->
+          <div class="lab-canvas-box">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <b>1 &middot; Select donor region</b>
+              <span class="badge navy">Drag Box</span>
+            </div>
+            <div class="lab-canvas-frame">
+              <canvas id="donorCanvas"></canvas>
+            </div>
+            <div class="small muted">Klik dan tarik untuk membuat kotak. Gunakan input koordinat untuk presisi.</div>
+            <div class="lab-coords-grid">
+              <div class="lab-field"><label>Donor X</label><input type="number" id="roiDx" value="160" step="16"></div>
+              <div class="lab-field"><label>Donor Y</label><input type="number" id="roiDy" value="200" step="16"></div>
+              <div class="lab-field"><label>Width</label><input type="number" id="roiDw" value="256" step="16"></div>
+              <div class="lab-field"><label>Height</label><input type="number" id="roiDh" value="320" step="16"></div>
+            </div>
+          </div>
+
+          <!-- 2. Place on Target -->
+          <div class="lab-canvas-box">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <b>2 &middot; Place on target</b>
+              <span class="badge navy">Click / Drag</span>
+            </div>
+            <div class="lab-canvas-frame">
+              <canvas id="targetCanvas"></canvas>
+            </div>
+            <div class="small muted">Klik atau tarik untuk memindahkan sisipan. Preview memakai crop donor tanpa resize.</div>
+            <div class="lab-coords-grid2">
+              <div class="lab-field"><label>Target X</label><input type="number" id="roiTx" value="256" step="16"></div>
+              <div class="lab-field"><label>Target Y</label><input type="number" id="roiTy" value="320" step="16"></div>
+            </div>
+            <div class="lab-field" style="margin-top:10px">
+              <label>Final JPEG QF</label>
+              <input type="number" id="roiFinalQf" value="85" min="1" max="100">
+            </div>
+          </div>
+        </div>
+
+        <div class="lab-check-row">
+          <input type="checkbox" id="roiSnap16" checked>
+          <label for="roiSnap16"><b>Snap ke grid 16 piksel</b> saat memilih dengan mouse/touch <span class="muted">(Grid 16 px aligned, sufficient for 4:2:0)</span></label>
+        </div>
+
+        <p class="small muted" style="line-height:1.6">
+          QF akhir default sama dengan target. Alignment donor dan target yang sepadan membantu mempertahankan jejak blok JPEG; ketidaksejajaran dapat membuat ghost menghilang.
+        </p>
+
+        <button class="btn" id="btnGenTampered" style="margin-top:6px" disabled>Generate Tampered Image &rarr;</button>
+
+        <!-- Spliced Composite & Control Output Panel -->
+        <div id="step02SummaryBox" style="display:none;margin-top:20px;border-top:1px solid var(--line);padding-top:18px">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+            <div>
+              <div class="lab-step-tag">COMPOSITE &amp; CONTROL</div>
+              <b id="step02MetaLine" style="font-size:14px;color:#ffffff">-</b>
+            </div>
+            <button class="btn sec" id="btnDownloadTampered">&darr; Final JPEG</button>
+          </div>
+
+          <div class="lab-grid-3">
+            <div class="lab-preview-cell">
+              <span>Tampered image &middot; Final JPEG</span>
+              <div class="lab-preview-frame">
+                <img id="tamperedPrev" alt="Tampered JPEG">
+              </div>
+              <span class="mono" id="tamperedPrevMeta">-</span>
+            </div>
+            <div class="lab-preview-cell">
+              <span>Control &mdash; no splice</span>
+              <div class="lab-preview-frame">
+                <img id="controlPrev" alt="Control JPEG">
+              </div>
+              <span class="mono" id="controlPrevMeta">-</span>
+            </div>
+            <div class="lab-preview-cell">
+              <span>Ground-truth mask</span>
+              <div class="lab-preview-frame">
+                <img id="maskPrev" alt="Ground-truth mask">
+              </div>
+              <span class="mono" id="maskPrevMeta">White = pasted region</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 03: Forensic Preview (JPEG Ghost & ELA) -->
+      <div class="card">
+        <div class="lab-step-head">
+          <div>
+            <div class="lab-step-tag">STEP 03</div>
+            <h2 style="margin:2px 0 0">Forensic preview</h2>
+          </div>
+          <span class="badge ok">Multi-Method Analysis</span>
+        </div>
+        <p class="lab-card-sub">Jalankan masing-masing metode terhadap JPEG final yang sama. Hasil tidak mengubah gambar maupun database referensi.</p>
+
+        <!-- Direct Upload Option for Pre-Tampered Image -->
+        <div style="background:var(--panel2);border:1px dashed var(--line);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+          <div class="small">
+            <b>Direct Analysis Option:</b> Analisis langsung file gambar bukti/manipulasi eksternal tanpa melalui generator Step 01 &amp; 02.
+          </div>
+          <label class="btn sec" style="padding:0 14px;min-height:36px;font-size:12px">
+            Upload Image to Analyze
+            <input type="file" id="directTamperedUpload" accept="image/*,.jpg,.jpeg,.png">
+          </label>
+        </div>
+
+        <div class="lab-grid-2">
+          <!-- JPEG Ghost Settings -->
+          <div class="lab-source-box">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <b>JPEG Ghost</b>
+              <span class="badge navy">Multi QF</span>
+            </div>
+            <div class="lab-coords-grid2">
+              <div class="lab-field"><label>Minimum QF</label><input type="number" id="ghostMinQf" value="15" min="1" max="95"></div>
+              <div class="lab-field"><label>Maximum QF</label><input type="number" id="ghostMaxQf" value="90" min="5" max="100"></div>
+              <div class="lab-field"><label>Interval</label><input type="number" id="ghostStep" value="5" min="1" max="20"></div>
+              <div class="lab-field">
+                <label>Block size</label>
+                <select id="ghostBlockSize" style="width:100%;height:38px;padding:4px 8px">
+                  <option value="16" selected>16 &times; 16</option>
+                  <option value="8">8 &times; 8</option>
+                </select>
+              </div>
+              <div class="lab-field"><label>Grid offset X</label><input type="number" id="ghostOffX" value="0"></div>
+              <div class="lab-field"><label>Grid offset Y</label><input type="number" id="ghostOffY" value="0"></div>
+            </div>
+            <p class="small muted" style="margin:10px 0 12px;line-height:1.5">
+              Default 16 heatmap (15&ndash;90, interval 5). Normalisasi lintas QF, ROI dari ground truth, MSE dan K-S.
+            </p>
+            <div class="progress" style="display:none;margin-bottom:10px" id="ghostProgWrap"><div id="ghostProg"></div></div>
+            <button class="btn" id="btnGhostPrev" disabled>JPEG Ghost Preview</button>
+          </div>
+
+          <!-- Error Level Analysis (ELA) Settings -->
+          <div class="lab-source-box">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <b>Error Level Analysis</b>
+              <span class="badge warn">Single QF</span>
+            </div>
+            <div class="lab-coords-grid2">
+              <div class="lab-field"><label>ELA quality</label><input type="number" id="elaQuality" value="75" min="1" max="100"></div>
+              <div class="lab-field"><label>Fixed gain</label><input type="number" id="elaGain" value="10" min="1" max="50"></div>
+            </div>
+            <p class="small muted" style="margin:10px 0 12px;line-height:1.5">
+              Selisih absolut RGB &times; gain tetap, dibatasi 255. Memperlihatkan disparitas laju dekompresi antar area citra.
+            </p>
+            <button class="btn" id="btnElaPrev" disabled style="margin-top:16px">JPEG ELA Preview</button>
+            <button class="btn sec" id="btnRunBothForensic" style="margin-top:16px;margin-left:6px">Run All Previews</button>
+          </div>
+        </div>
+
+        <!-- JPEG Ghost Result Section -->
+        <div id="ghostResultSection" style="display:none;margin-top:24px;border-top:1px solid var(--line);padding-top:18px">
+          <div style="font-size:11px;font-weight:800;letter-spacing:1px;color:var(--accent)">RESULT / JPEG GHOST</div>
+          <h3 style="font-size:18px;margin:4px 0 6px">JPEG Ghost Maps</h3>
+          <p class="small muted" style="margin:0">16 panels &middot; QF 15&ndash;90 &middot; 16 &times; 16 blocks (Hany Farid 2009)</p>
+
+          <div class="lab-legend-box">
+            <span><b>0 &middot; low error</b> (dark blue/purple)</span>
+            <div class="lab-legend-bar"></div>
+            <span><b>1 &middot; high error</b> (yellow)</span>
+          </div>
+
+          <!-- 16 Heatmap Grid -->
+          <div class="lab-ghost-grid" id="ghostGrid"></div>
+
+          <div class="small muted" style="line-height:1.6;margin-bottom:16px">
+            Ungu gelap = respons relatif kecil; kuning = relatif besar. Cyan sekitar 0,5 digunakan untuk blok tidak informatif (variansi rendah atau respons tetap). Peta menampilkan grid blok asli. Bandingkan minimum lokal dan ROI; warna bukan keputusan manipulasi otomatis.
+          </div>
+
+          <!-- Charts -->
+          <div class="lab-grid-2">
+            <!-- Raw MSE Curve -->
+            <div class="lab-chart-box">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <b>Raw MSE</b>
+                <div class="small" style="display:flex;gap:10px">
+                  <span style="color:#21918c">&mdash; mse</span>
+                  <span style="color:#d97706">&mdash; roi_mse</span>
+                  <span style="color:#8a98c0">&mdash; outside_mse</span>
+                </div>
+              </div>
+              <div id="mseChartBox"></div>
+            </div>
+
+            <!-- ROI vs background K-S Curve -->
+            <div class="lab-chart-box">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <b>ROI vs background &middot; K-S</b>
+                <span class="badge navy">Kolmogorov-Smirnov</span>
+              </div>
+              <div id="ksChartBox"></div>
+              <div class="small muted" id="ksMinimaText" style="margin-top:6px">-</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ELA Result Section -->
+        <div id="elaResultSection" style="display:none;margin-top:24px;border-top:1px solid var(--line);padding-top:18px">
+          <div style="font-size:11px;font-weight:800;letter-spacing:1px;color:var(--accent)">RESULT / ELA</div>
+          <h3 style="font-size:18px;margin:4px 0 6px">ELA Map</h3>
+          <p class="small muted" id="elaSubtitle" style="margin:0">-</p>
+
+          <div class="lab-grid-2" style="margin-top:14px">
+            <div class="lab-preview-cell">
+              <span>Tampered JPEG &middot; Same analysis input</span>
+              <div class="lab-preview-frame" style="height:280px">
+                <img id="elaTamperedPrev" alt="Tampered JPEG Input">
+              </div>
+            </div>
+            <div class="lab-preview-cell">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <span>ELA Map &middot; Fixed gain result</span>
+                <button class="lab-link-btn" id="elaDownloadBtn">PNG &darr;</button>
+              </div>
+              <div class="lab-preview-frame" style="height:280px">
+                <img id="elaMapPrev" alt="ELA Map">
+              </div>
+            </div>
+          </div>
+          <div class="small muted" style="line-height:1.6;margin-top:8px">
+            Terang = error kompresi lebih besar. Bandingkan tepi dan tekstur sejenis. <span id="elaClippingText">-</span>
+          </div>
+        </div>
+
+        <!-- Method Note -->
+        <div class="lab-method-note">
+          <b>Method note:</b> JPEG Ghost mengikuti Farid (2009), persamaan (2)&ndash;(4), dengan blok non-overlapping dan offset manual; ELA mengikuti Lecture 6 slide 33&ndash;34. Tidak ada klasifikasi otomatis asli/palsu. Data eksperimen disimpan terpisah dari database signature referensi kamera.
+        </div>
+      </div>
+    </section>
+
   </main>
   <footer class="app-footer">
     <div>JPEG Signature Analyzer &amp; Database &middot; 100% Client-Side Multimedia Forensic Tool</div>
@@ -231,6 +618,7 @@
   <script src="dataset.js"></script>
   <script src="huffman.js"></script>
   <script src="app.js"></script>
+  <script src="tampering-lab.js"></script>
 </body>
 
 </html>

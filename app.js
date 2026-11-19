@@ -516,6 +516,7 @@ function renderAll() {
   renderClassify(groups);
   initGalleryFilters();
   renderGallery();
+  if (window.TamperingLab && window.TamperingLab.populateCatalog) window.TamperingLab.populateCatalog();
 }
 
 /* ---------------- Photo Gallery ---------------- */

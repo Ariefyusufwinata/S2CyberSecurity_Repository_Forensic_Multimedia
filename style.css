@@ -153,6 +153,67 @@ details summary{cursor:pointer;line-height:1.8}
 .action h3{margin:0;font-size:16px;color:#fff}
 .action p{margin:0;color:var(--muted);font-size:13.5px;flex-grow:1}
 
+/* ---------- Tampering Analysis Lab ---------- */
+.lab-crumb{font-size:12px;font-weight:700;letter-spacing:.8px;color:var(--muted);text-transform:uppercase;margin-bottom:6px}
+.lab-crumb span{color:var(--accent)}
+.lab-title-row{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;margin-bottom:18px}
+.lab-title-col{flex:1;min-width:280px}
+.lab-title-col h1{margin:0 0 6px;font-size:24px;color:#ffffff;line-height:1.2}
+.lab-title-col p{margin:0;color:var(--muted);font-size:13.5px}
+.lab-actions-col{display:flex;gap:10px;flex-wrap:wrap}
+
+.lab-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+.lab-step-pill{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 16px;font-size:13.5px;font-weight:700;color:var(--muted);display:flex;align-items:center;gap:10px}
+.lab-step-pill.active{background:var(--navy-hi);color:#ffffff;border-color:var(--accent)}
+.lab-step-pill.completed{background:var(--ok);color:var(--ok-t);border-color:var(--ok)}
+.lab-step-pill.disabled{background:var(--panel);color:var(--muted);border-color:var(--line)}
+.lab-step-num{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--panel3);font-size:12px}
+.lab-step-pill.active .lab-step-num{background:#ffffff;color:var(--navy-hi)}
+.lab-step-pill.completed .lab-step-num{background:var(--ok-t);color:var(--ok)}
+
+.lab-step-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px}
+.lab-step-tag{font-size:11px;font-weight:800;letter-spacing:1px;color:var(--accent);text-transform:uppercase}
+.lab-card-sub{color:var(--muted);font-size:13px;margin:2px 0 16px}
+
+.lab-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:16px}
+.lab-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px}
+.lab-source-box{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:16px}
+.lab-source-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.lab-source-title{font-size:13px;font-weight:800;color:#ffffff;letter-spacing:.5px}
+.lab-preview-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+.lab-preview-cell{background:var(--panel3);border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.lab-preview-cell.pending{border-style:dashed}
+.lab-preview-cell span{font-size:11.5px;color:var(--muted);font-weight:600}
+.lab-preview-frame{width:100%;height:160px;background:#050914;border:1px solid var(--line);border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.lab-preview-frame img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+
+.lab-canvas-box{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:16px}
+.lab-canvas-frame{width:100%;height:320px;background:#050914;border:2px solid var(--line);border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:auto;margin:12px 0;position:relative}
+.lab-canvas-frame canvas{max-width:100%;max-height:100%;display:block;cursor:crosshair}
+.lab-coords-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px}
+.lab-coords-grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:10px}
+.lab-field label{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:4px}
+.lab-field input[type=number],.lab-field input[type=text]{width:100%;background:var(--panel3);border:1px solid var(--line);color:#ffffff;border-radius:8px;padding:8px 10px;font-size:13.5px}
+
+.lab-check-row{display:flex;align-items:center;gap:10px;margin:14px 0;font-size:13.5px}
+.lab-check-row input[type=checkbox]{width:18px;height:18px;accent-color:var(--navy-hi);cursor:pointer}
+
+.lab-ghost-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px;margin:16px 0}
+.lab-ghost-card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+.lab-ghost-head{background:var(--panel3);padding:8px 12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);font-size:12px;font-weight:700;color:#ffffff}
+.lab-ghost-body{width:100%;height:180px;background:#050914;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.lab-ghost-img{width:100%;height:100%;object-fit:cover;display:block}
+
+.lab-link-btn{background:var(--panel3);color:var(--accent);border:1px solid var(--line);border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer}
+.lab-link-btn:hover{background:var(--navy-hi);color:#ffffff}
+
+.lab-legend-box{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin:14px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;font-size:12.5px;color:var(--muted)}
+.lab-legend-bar{width:200px;height:12px;border-radius:6px;background:linear-gradient(90deg,#440154 0%,#31688e 30%,#21918c 50%,#35b779 70%,#fde725 100%);border:1px solid var(--line)}
+
+.lab-chart-box{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.lab-chart-svg{width:100%;height:auto;max-height:240px;display:block}
+.lab-method-note{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:8px;padding:14px 18px;font-size:12.5px;color:var(--muted);line-height:1.6;margin-top:24px}
+
 /* ---------- Footer ---------- */
 .app-footer{background:var(--panel);border-top:1px solid var(--line);padding:20px 28px;text-align:center;font-size:13px;color:var(--text);margin-top:40px}
 
@@ -204,6 +265,11 @@ details summary{cursor:pointer;line-height:1.8}
   .modal-head{top:-16px}
   .action-grid{grid-template-columns:1fr}
   .scroll{max-height:380px}
+  .lab-steps{grid-template-columns:1fr;gap:6px}
+  .lab-grid-2,.lab-grid-3{grid-template-columns:1fr}
+  .lab-preview-pair{grid-template-columns:1fr}
+  .lab-coords-grid{grid-template-columns:repeat(2,1fr)}
+  .lab-canvas-frame{height:220px}
 }
 
 @media(max-width:380px){
