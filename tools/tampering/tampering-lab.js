@@ -129,13 +129,37 @@
     return (b / (1024 * 1024)).toFixed(2) + ' MB';
   }
 
+  function formatSafeUrl(url) {
+    if (!url) return '';
+    if (url.startsWith('data:') || url.startsWith('blob:')) return url;
+    try {
+      return encodeURI(decodeURI(url));
+    } catch (_) {
+      return encodeURI(url);
+    }
+  }
+
   function loadImageFromUrl(url) {
     return new Promise((resolve, reject) => {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
+      // Only set crossOrigin for remote absolute HTTP/HTTPS URLs that differ from origin
+      if (/^https?:\/\//i.test(url)) {
+        try {
+          if (typeof window !== 'undefined' && window.location && window.location.origin) {
+            const u = new URL(url, window.location.href);
+            if (u.origin !== window.location.origin) {
+              img.crossOrigin = 'anonymous';
+            }
+          } else {
+            img.crossOrigin = 'anonymous';
+          }
+        } catch (_) {
+          img.crossOrigin = 'anonymous';
+        }
+      }
       img.onload = () => resolve(img);
       img.onerror = () => reject(new Error('Failed to load image from ' + url));
-      img.src = url;
+      img.src = formatSafeUrl(url);
     });
   }
 
@@ -175,19 +199,54 @@
     const src = state[kind];
     if (!src.img) return;
 
-    const canvas = document.createElement('canvas');
-    canvas.width = src.width;
-    canvas.height = src.height;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(src.img, 0, 0);
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = src.width;
+      canvas.height = src.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(src.img, 0, 0);
 
-    const q = Math.max(1, Math.min(100, src.qf)) / 100;
-    const blob = await canvasToBlob(canvas, 'image/jpeg', q);
-    src.jpegBlob = blob;
-    src.jpegSize = blob.size;
-    if (src.jpegDataUrl) URL.revokeObjectURL(src.jpegDataUrl);
-    src.jpegDataUrl = URL.createObjectURL(blob);
-    src.decodedImg = await loadImageFromUrl(src.jpegDataUrl);
+      const q = Math.max(1, Math.min(100, src.qf)) / 100;
+      let blob = await canvasToBlob(canvas, 'image/jpeg', q);
+      if (!blob && src.sampleThumb) {
+        throw new Error('Canvas tainted or export empty');
+      }
+      if (blob) {
+        src.jpegBlob = blob;
+        src.jpegSize = blob.size;
+        if (src.jpegDataUrl) URL.revokeObjectURL(src.jpegDataUrl);
+        src.jpegDataUrl = URL.createObjectURL(blob);
+        src.decodedImg = await loadImageFromUrl(src.jpegDataUrl);
+      }
+    } catch (err) {
+      console.warn(`convertSource error for ${kind}, checking data thumbnail fallback:`, err);
+      if (src.sampleThumb && src.img.src !== src.sampleThumb) {
+        try {
+          const fallbackImg = await loadImageFromUrl(src.sampleThumb);
+          src.img = fallbackImg;
+          src.width = fallbackImg.naturalWidth || fallbackImg.width;
+          src.height = fallbackImg.naturalHeight || fallbackImg.height;
+
+          const canvas = document.createElement('canvas');
+          canvas.width = src.width;
+          canvas.height = src.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(src.img, 0, 0);
+
+          const q = Math.max(1, Math.min(100, src.qf)) / 100;
+          const blob = await canvasToBlob(canvas, 'image/jpeg', q);
+          if (blob) {
+            src.jpegBlob = blob;
+            src.jpegSize = blob.size;
+            if (src.jpegDataUrl) URL.revokeObjectURL(src.jpegDataUrl);
+            src.jpegDataUrl = URL.createObjectURL(blob);
+            src.decodedImg = await loadImageFromUrl(src.jpegDataUrl);
+          }
+        } catch (innerErr) {
+          console.error('Fallback convertSource failed:', innerErr);
+        }
+      }
+    }
 
     renderSourceCard(kind);
     updateStepStatus();
@@ -1235,35 +1294,99 @@
     dnrSel.innerHTML = '<option value="">-- Choose from Catalog Samples --</option>';
 
     const samplesList = window.samples || (window.DEFAULT_SIGNATURES && window.DEFAULT_SIGNATURES.samples) || [];
-    samplesList.slice(0, 100).forEach(s => {
+    samplesList.forEach(s => {
+      const filePath = s.file || (s.id ? s.id.split('|')[0] : '');
+      const fileName = filePath ? filePath.split('/').pop() : 'Sample';
+      const folder = filePath ? (filePath.split('/')[1] || '') : '';
+      const label = `${s.device || 'Camera'} [${folder ? folder + ' / ' : ''}${fileName}]`;
+
       const opt1 = document.createElement('option');
       opt1.value = s.file || s.id;
-      opt1.textContent = `${s.device || 'Camera'} (${s.file ? s.file.split('/').pop() : s.id})`;
+      opt1.textContent = label;
       tgtSel.appendChild(opt1);
 
       const opt2 = document.createElement('option');
       opt2.value = s.file || s.id;
-      opt2.textContent = `${s.device || 'Camera'} (${s.file ? s.file.split('/').pop() : s.id})`;
+      opt2.textContent = label;
       dnrSel.appendChild(opt2);
     });
   }
 
-  async function loadSampleInto(kind, filePath) {
-    if (!filePath) return;
-    try {
-      const img = await loadImageFromUrl(filePath);
-      const name = filePath.split('/').pop();
-      state[kind].file = null;
-      state[kind].name = name;
-      state[kind].img = img;
-      state[kind].width = img.naturalWidth || img.width;
-      state[kind].height = img.naturalHeight || img.height;
-      await convertSource(kind);
-      drawDonorOverlay();
-      drawTargetOverlay();
-    } catch (e) {
-      alert(`Could not load image ${filePath}. Ensure images are served via web server or upload directly.`);
+  async function loadSampleInto(kind, sampleKey) {
+    if (!sampleKey) return;
+    const samplesList = window.samples || (window.DEFAULT_SIGNATURES && window.DEFAULT_SIGNATURES.samples) || [];
+    const rawPath = sampleKey.includes('|') ? sampleKey.split('|')[0] : sampleKey;
+    const baseName = rawPath.split('/').pop();
+
+    const sampleObj = samplesList.find(s =>
+      s.file === sampleKey ||
+      s.id === sampleKey ||
+      s.file === rawPath ||
+      (s.id && s.id.split('|')[0] === rawPath) ||
+      (s.file && s.file.split('/').pop() === baseName)
+    );
+
+    const displayName = (sampleObj && sampleObj.file ? sampleObj.file.split('/').pop() : baseName) || 'Sample';
+    let img = null;
+    let loadSource = '';
+
+    // Step A: Attempt direct load from relative path candidates
+    const candidates = [
+      rawPath,
+      formatSafeUrl(rawPath),
+      './' + rawPath.replace(/^\.?\//, ''),
+      sampleObj && sampleObj.file ? sampleObj.file : null,
+      sampleObj && sampleObj.file ? formatSafeUrl(sampleObj.file) : null
+    ].filter(Boolean);
+
+    for (const p of [...new Set(candidates)]) {
+      try {
+        img = await loadImageFromUrl(p);
+        loadSource = 'original';
+        break;
+      } catch (_) {
+        // Continue to next candidate
+      }
     }
+
+    // Step B: If direct file load failed, fallback to embedded thumbnail in dataset
+    if (!img && sampleObj && sampleObj.thumb) {
+      try {
+        img = await loadImageFromUrl(sampleObj.thumb);
+        loadSource = 'embedded';
+      } catch (errThumb) {
+        console.warn('Fallback to embedded thumbnail failed:', errThumb);
+      }
+    }
+
+    // Step C: If still not loaded, try fetch blob -> createObjectURL
+    if (!img) {
+      try {
+        const resp = await fetch(formatSafeUrl(rawPath));
+        if (resp.ok) {
+          const blob = await resp.blob();
+          const objUrl = URL.createObjectURL(blob);
+          img = await loadImageFromUrl(objUrl);
+          loadSource = 'blob';
+        }
+      } catch (_) {}
+    }
+
+    if (!img) {
+      alert(`Could not load image ${rawPath}. Ensure images are served via web server or upload directly via the file picker.`);
+      return;
+    }
+
+    state[kind].file = null;
+    state[kind].name = displayName + (loadSource === 'embedded' ? ' [Embedded]' : '');
+    state[kind].sampleThumb = (sampleObj && sampleObj.thumb) ? sampleObj.thumb : null;
+    state[kind].img = img;
+    state[kind].width = img.naturalWidth || img.width;
+    state[kind].height = img.naturalHeight || img.height;
+
+    await convertSource(kind);
+    drawDonorOverlay();
+    drawTargetOverlay();
   }
 
   /* ---------------- Initialization ---------------- */
