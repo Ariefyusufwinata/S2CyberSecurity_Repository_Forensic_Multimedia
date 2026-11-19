@@ -1228,6 +1228,34 @@ details summary {
   margin: 14px 0;
 }
 
+.lab-vmode-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  background: var(--panel2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  padding: 6px 12px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.lab-vmode-btn:hover {
+  background: var(--panel3);
+  border-color: var(--line-hi);
+  color: #ffffff;
+}
+
+.lab-vmode-btn.active {
+  background: #27272a;
+  border-color: #3b82f6;
+  color: #ffffff;
+}
+
 .lab-ghost-card {
   background: var(--panel2);
   border: 1px solid var(--line);
@@ -1236,6 +1264,15 @@ details summary {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  cursor: pointer;
+}
+
+.lab-ghost-card:hover {
+  border-color: #52525b;
+}
+
+.lab-ghost-card.active {
+  border-color: #3b82f6;
 }
 
 .lab-ghost-head {

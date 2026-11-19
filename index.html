@@ -530,11 +530,78 @@
           <div id="ruleEvaluationList" style="display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:18px"></div>
         </div>
 
-        <!-- JPEG Ghost Result Section -->
+        <!-- JPEG Ghost & Full-Image Forensic Heatmap Result Section -->
         <div id="ghostResultSection" style="display:none;margin-top:24px;border-top:1px solid var(--line);padding-top:18px">
-          <div style="font-size:11px;font-weight:800;letter-spacing:1px;color:var(--accent)">RESULT / JPEG GHOST</div>
-          <h3 style="font-size:18px;margin:4px 0 6px">JPEG Ghost Maps</h3>
-          <p class="small muted" style="margin:0">16 panels &middot; QF 15&ndash;90 &middot; 16 &times; 16 blocks (Hany Farid 2009)</p>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px">
+            <div>
+              <div style="font-size:11px;font-weight:800;letter-spacing:1px;color:var(--accent)">RESULT / FORENSIC HEATMAPS &amp; ELA</div>
+              <h3 style="font-size:18px;margin:4px 0 2px">Full-Image Forensic Heatmap &amp; Error Level Analysis</h3>
+              <p class="small muted" style="margin:0">Visualisasi resolusi penuh seluruh gambar untuk deteksi jejak kompresi JPEG Ghost dan anomali ELA.</p>
+            </div>
+            <div style="display:flex;gap:6px">
+              <button class="lab-link-btn" id="btnDownloadFullViewer">Save View (PNG) &darr;</button>
+            </div>
+          </div>
+
+          <!-- Interactive Full-Image Forensic Viewer Card -->
+          <div class="lab-source-box" style="margin:14px 0 20px;padding:16px">
+            <!-- Mode Selector Toolbar -->
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;border-bottom:1px solid var(--line);padding-bottom:12px">
+              <div style="display:flex;flex-wrap:wrap;gap:6px" id="viewerModeGroup">
+                <button type="button" class="lab-vmode-btn active" data-vmode="ghost" id="btnModeGhost">👻 Ghost Heatmap</button>
+                <button type="button" class="lab-vmode-btn" data-vmode="ghost_overlay" id="btnModeGhostOverlay">🔀 Image + Ghost Overlay</button>
+                <button type="button" class="lab-vmode-btn" data-vmode="ela" id="btnModeEla">⚡ ELA Map</button>
+                <button type="button" class="lab-vmode-btn" data-vmode="ela_overlay" id="btnModeElaOverlay">🔀 Image + ELA Overlay</button>
+                <button type="button" class="lab-vmode-btn" data-vmode="original" id="btnModeOriginal">🖼 Original Image</button>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="badge navy" id="viewerBadgeQf">QF 65</span>
+                <span class="badge ok" id="viewerBadgeMode">Ghost Heatmap</span>
+              </div>
+            </div>
+
+            <!-- Interactive Sliders / Controls Bar -->
+            <div class="lab-coords-grid2" style="margin-bottom:12px">
+              <div class="lab-field">
+                <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+                  <label for="viewerQfSlider">Selected Quality Factor (QF)</label>
+                  <b id="viewerQfVal">65</b>
+                </div>
+                <input type="range" id="viewerQfSlider" min="15" max="90" step="5" value="65" style="width:100%">
+              </div>
+              <div class="lab-field">
+                <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+                  <label for="viewerBlendSlider">Forensic Overlay Blend</label>
+                  <b id="viewerBlendVal">50%</b>
+                </div>
+                <input type="range" id="viewerBlendSlider" min="0" max="100" step="5" value="50" style="width:100%">
+              </div>
+              <div class="lab-field">
+                <label for="viewerNormSelect">Heatmap Scale Metric</label>
+                <select id="viewerNormSelect" style="width:100%;height:38px;padding:4px 8px">
+                  <option value="cross" selected>Cross-QF Normalization (Farid 2009 - Kompresi Riwayat)</option>
+                  <option value="spatial">Full-Image Spatial Error (Distribusi Error Menyeluruh)</option>
+                </select>
+              </div>
+              <div class="lab-field">
+                <label for="viewerColormapSelect">Colormap Palette</label>
+                <select id="viewerColormapSelect" style="width:100%;height:38px;padding:4px 8px">
+                  <option value="viridis" selected>Viridis (Perceptual Uniform)</option>
+                  <option value="jet">Jet / Rainbow Spectral</option>
+                  <option value="grayscale">High-Contrast Grayscale</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Large Viewport Canvas Frame -->
+            <div class="lab-preview-frame" style="min-height:380px;height:440px;position:relative;background:#000000;display:flex;align-items:center;justify-content:center;overflow:hidden">
+              <canvas id="fullViewerCanvas" style="max-width:100%;max-height:100%;object-fit:contain"></canvas>
+              <div id="fullViewerLegend" style="position:absolute;bottom:8px;left:12px;right:12px;background:#09090b;border:1px solid #27272a;border-radius:4px;padding:5px 10px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#a1a1aa">
+                <span id="fullViewerStatusText">Ghost Heatmap · QF 65 · Cross-QF Farid · 16×16 blocks</span>
+                <span id="fullViewerCoordText">Hover image to inspect coordinates</span>
+              </div>
+            </div>
+          </div>
 
           <div class="lab-legend-box">
             <span><b>0 &middot; low error</b> (dark blue/purple)</span>
@@ -542,11 +609,15 @@
             <span><b>1 &middot; high error</b> (yellow)</span>
           </div>
 
-          <!-- 16 Heatmap Grid -->
+          <!-- 16 Heatmap Grid Overview -->
+          <div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 8px">
+            <span style="font-size:13px;font-weight:700;color:#ffffff">16-Panel Overview Grid (Klik salah satu panel untuk inspect di Full-Image Viewer):</span>
+            <span class="small muted">QF 15 &ndash; 90</span>
+          </div>
           <div class="lab-ghost-grid" id="ghostGrid"></div>
 
           <div class="small muted" style="line-height:1.6;margin-bottom:16px">
-            Ungu gelap = respons relatif kecil; kuning = relatif besar. Cyan sekitar 0,5 digunakan untuk blok tidak informatif (variansi rendah atau respons tetap). Peta menampilkan grid blok asli. Bandingkan minimum lokal dan ROI; warna bukan keputusan manipulasi otomatis.
+            Ungu gelap = respons relatif kecil (rekam kompresi cocok); kuning = relatif besar (mismatch kompresi). Cyan sekitar 0,5 digunakan untuk blok tidak informatif. Klik pada panel mana saja untuk memuat gambar penuh pada QF tersebut di viewer atas.
           </div>
 
           <!-- Charts -->

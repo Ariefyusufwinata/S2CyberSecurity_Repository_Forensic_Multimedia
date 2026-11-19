@@ -75,6 +75,7 @@
       offsetX: 0,
       offsetY: 0,
       results: [],
+      rawQMaps: [],
       curves: { qf: [], mse: [], roiMse: [], outsideMse: [], ks: [] },
       localMinima: []
     },
@@ -84,11 +85,19 @@
       mae: 0,
       clippingPct: 0,
       elaBlob: null,
-      elaUrl: null
+      elaUrl: null,
+      elaCanvas: null
+    },
+    viewer: {
+      mode: 'ghost', // 'ghost', 'ghost_overlay', 'ela', 'ela_overlay', 'original'
+      normMode: 'cross', // 'cross' (Farid Cross-QF) or 'spatial' (Full-Image Spatial Error)
+      selectedQf: 65,
+      blendAlpha: 0.5,
+      colormap: 'viridis'
     }
   };
 
-  /* ---------------- Viridis Colormap Implementation ---------------- */
+  /* ---------------- Colormaps (Viridis & Jet) ---------------- */
   // Perceptually uniform viridis color stops for scientific forensic rendering
   const VIRIDIS_STOPS = [
     { p: 0.00, r: 68,  g: 1,   b: 84  }, // #440154 (dark purple/low error)
@@ -116,6 +125,42 @@
       }
     }
     return [253, 231, 37];
+  }
+
+  const JET_STOPS = [
+    { p: 0.00, r: 0,   g: 0,   b: 143 },
+    { p: 0.15, r: 0,   g: 0,   b: 255 },
+    { p: 0.35, r: 0,   g: 255, b: 255 },
+    { p: 0.55, r: 255, g: 255, b: 0   },
+    { p: 0.80, r: 255, g: 127, b: 0   },
+    { p: 1.00, r: 128, g: 0,   b: 0   }
+  ];
+
+  function jet(t) {
+    if (isNaN(t) || t <= 0) return [0, 0, 143];
+    if (t >= 1) return [128, 0, 0];
+    for (let i = 0; i < JET_STOPS.length - 1; i++) {
+      const s0 = JET_STOPS[i];
+      const s1 = JET_STOPS[i + 1];
+      if (t >= s0.p && t <= s1.p) {
+        const frac = (t - s0.p) / (s1.p - s0.p);
+        return [
+          Math.round(s0.r + frac * (s1.r - s0.r)),
+          Math.round(s0.g + frac * (s1.g - s0.g)),
+          Math.round(s0.b + frac * (s1.b - s0.b))
+        ];
+      }
+    }
+    return [128, 0, 0];
+  }
+
+  function getColor(t, colormap = 'viridis') {
+    if (colormap === 'jet') return jet(t);
+    if (colormap === 'grayscale') {
+      const v = Math.round(Math.max(0, Math.min(1, t)) * 255);
+      return [v, v, v];
+    }
+    return viridis(t);
   }
 
   /* ---------------- Helpers ---------------- */
@@ -730,7 +775,7 @@
       maxGrid[i] = maxVal;
     }
 
-    // Render normalized heatmaps onto individual canavses
+    // Render normalized heatmaps onto individual canvases & compute spatial error
     state.ghost.results = [];
     for (let idx = 0; idx < qMaps.length; idx++) {
       const qItem = qMaps[idx];
@@ -743,6 +788,22 @@
           normGrid[i] = (qItem.grid[i] - minGrid[i]) / span;
         }
       }
+
+      // Compute Spatial Full-Image MSE grid for this QF
+      let sMin = Infinity, sMax = -Infinity;
+      for (let i = 0; i < numBlocks; i++) {
+        const v = qItem.grid[i];
+        if (v < sMin) sMin = v;
+        if (v > sMax) sMax = v;
+      }
+      const spatialGrid = new Float32Array(numBlocks);
+      const sSpan = sMax - sMin;
+      for (let i = 0; i < numBlocks; i++) {
+        spatialGrid[i] = sSpan > 1e-4 ? (qItem.grid[i] - sMin) / sSpan : 0.5;
+      }
+
+      qItem.normGrid = normGrid;
+      qItem.spatialGrid = spatialGrid;
 
       // Draw Viridis Heatmap
       const mapCanvas = document.createElement('canvas');
@@ -788,6 +849,11 @@
         ks: qKs[idx]
       });
     }
+
+    state.ghost.rawQMaps = qMaps;
+    state.ghost.fullW = w;
+    state.ghost.fullH = h;
+    state.ghost.origData = origData;
 
     state.ghost.curves = {
       qf: qList,
@@ -840,7 +906,8 @@
 
     state.ghost.results.forEach(res => {
       const card = document.createElement('div');
-      card.className = 'lab-ghost-card';
+      card.className = 'lab-ghost-card' + (res.q === state.viewer.selectedQf ? ' active' : '');
+      card.dataset.q = String(res.q);
       card.innerHTML = `
         <div class="lab-ghost-head">
           <b>QF ${res.q}</b>
@@ -850,11 +917,19 @@
           <img src="${res.url}" alt="JPEG Ghost QF ${res.q}" class="lab-ghost-img">
         </div>
       `;
-      card.querySelector('button').onclick = () => downloadBlob(res.blob, `ghost_qf${res.q}.png`);
+      card.onclick = (e) => {
+        if (e.target.tagName.toLowerCase() === 'button') return;
+        selectViewerQf(res.q);
+      };
+      card.querySelector('button').onclick = (e) => {
+        e.stopPropagation();
+        downloadBlob(res.blob, `ghost_qf${res.q}.png`);
+      };
       grid.appendChild(card);
     });
 
     $('#ghostResultSection').style.display = 'block';
+    renderFullViewer();
     renderInterpretation();
   }
 
@@ -927,6 +1002,9 @@
 
     state.ela.mae = mae;
     state.ela.clippingPct = clipPct;
+    state.ela.elaCanvas = elaCanvas;
+    state.ela.w = w;
+    state.ela.h = h;
 
     const blob = await canvasToBlob(elaCanvas, 'image/png');
     if (state.ela.elaUrl) URL.revokeObjectURL(state.ela.elaUrl);
@@ -938,7 +1016,201 @@
     $('#elaMapPrev').src = state.ela.elaUrl;
     $('#elaSubtitle').textContent = `QF ${elaQf} · Fixed gain ×${gain} · MAE ${mae}`;
     $('#elaClippingText').textContent = `Clipping setelah gain: ${clipPct}% nilai channel.`;
+    renderFullViewer();
     renderInterpretation();
+  }
+
+  /* ---------------- Full-Image Forensic Viewer & Overlay ---------------- */
+  function renderFullViewer() {
+    const canvas = $('#fullViewerCanvas');
+    if (!canvas) return;
+
+    const inputImg = state.composite.tamperedImg;
+    if (!inputImg) return;
+
+    const fullW = inputImg.naturalWidth || inputImg.width;
+    const fullH = inputImg.naturalHeight || inputImg.height;
+    if (canvas.width !== fullW || canvas.height !== fullH) {
+      canvas.width = fullW;
+      canvas.height = fullH;
+    }
+    const ctx = canvas.getContext('2d');
+
+    const vMode = state.viewer.mode;
+    const normMode = state.viewer.normMode;
+    const qf = state.viewer.selectedQf;
+    const blendAlpha = state.viewer.blendAlpha;
+    const colormap = state.viewer.colormap || 'viridis';
+
+    // 1. Get original image data
+    const origCanvas = document.createElement('canvas');
+    origCanvas.width = fullW;
+    origCanvas.height = fullH;
+    const oCtx = origCanvas.getContext('2d');
+    oCtx.drawImage(inputImg, 0, 0, fullW, fullH);
+    const origData = oCtx.getImageData(0, 0, fullW, fullH).data;
+
+    // Mode: Original
+    if (vMode === 'original') {
+      ctx.drawImage(inputImg, 0, 0, fullW, fullH);
+      updateFullViewerStatus(`Original Tampered Image · Native Full Pixels (${fullW}×${fullH})`);
+      return;
+    }
+
+    // Mode: ELA or ELA Overlay
+    if (vMode === 'ela' || vMode === 'ela_overlay') {
+      if (!state.ela.elaCanvas) {
+        ctx.drawImage(inputImg, 0, 0, fullW, fullH);
+        return;
+      }
+      const elaData = state.ela.elaCanvas.getContext('2d').getImageData(0, 0, fullW, fullH).data;
+
+      if (vMode === 'ela') {
+        ctx.drawImage(state.ela.elaCanvas, 0, 0, fullW, fullH);
+        updateFullViewerStatus(`Error Level Analysis (ELA) · Quality ${state.ela.qf} · Gain ×${state.ela.gain} · MAE ${state.ela.mae}`);
+      } else {
+        // Blend image + ELA
+        const outImgData = ctx.createImageData(fullW, fullH);
+        const outBuf = outImgData.data;
+        for (let i = 0; i < origData.length; i += 4) {
+          outBuf[i] = Math.min(255, Math.round(origData[i] * (1 - blendAlpha) + elaData[i] * blendAlpha));
+          outBuf[i + 1] = Math.min(255, Math.round(origData[i + 1] * (1 - blendAlpha) + elaData[i + 1] * blendAlpha));
+          outBuf[i + 2] = Math.min(255, Math.round(origData[i + 2] * (1 - blendAlpha) + elaData[i + 2] * blendAlpha));
+          outBuf[i + 3] = 255;
+        }
+        ctx.putImageData(outImgData, 0, 0);
+        updateFullViewerStatus(`Image + ELA Overlay (${Math.round(blendAlpha * 100)}%) · Quality ${state.ela.qf} · Gain ×${state.ela.gain}`);
+      }
+      return;
+    }
+
+    // Mode: Ghost Heatmap or Ghost Overlay
+    const qItem = state.ghost.rawQMaps ? state.ghost.rawQMaps.find(m => m.q === qf) : null;
+    if (!qItem) {
+      ctx.drawImage(inputImg, 0, 0, fullW, fullH);
+      return;
+    }
+
+    const gridToUse = (normMode === 'spatial' && qItem.spatialGrid) ? qItem.spatialGrid : qItem.normGrid;
+    const blockSize = qItem.blockSize;
+    const offX = qItem.offX;
+    const offY = qItem.offY;
+    const bCols = qItem.bCols;
+    const bRows = qItem.bRows;
+
+    const outImgData = ctx.createImageData(fullW, fullH);
+    const outBuf = outImgData.data;
+
+    for (let y = 0; y < fullH; y++) {
+      const by = Math.floor((y - offY) / blockSize);
+      const rOffset = y * fullW * 4;
+      for (let x = 0; x < fullW; x++) {
+        const bx = Math.floor((x - offX) / blockSize);
+        const p = rOffset + x * 4;
+
+        let val = 0.5;
+        if (bx >= 0 && bx < bCols && by >= 0 && by < bRows) {
+          val = gridToUse[by * bCols + bx];
+        }
+
+        const [hr, hg, hb] = getColor(val, colormap);
+
+        if (vMode === 'ghost_overlay') {
+          outBuf[p] = Math.min(255, Math.round(origData[p] * (1 - blendAlpha) + hr * blendAlpha));
+          outBuf[p + 1] = Math.min(255, Math.round(origData[p + 1] * (1 - blendAlpha) + hg * blendAlpha));
+          outBuf[p + 2] = Math.min(255, Math.round(origData[p + 2] * (1 - blendAlpha) + hb * blendAlpha));
+          outBuf[p + 3] = 255;
+        } else {
+          outBuf[p] = hr;
+          outBuf[p + 1] = hg;
+          outBuf[p + 2] = hb;
+          outBuf[p + 3] = 255;
+        }
+      }
+    }
+
+    ctx.putImageData(outImgData, 0, 0);
+
+    const normName = normMode === 'spatial' ? 'Full-Image Spatial Error (Raw MSE)' : 'Cross-QF Farid (2009)';
+    const modeName = vMode === 'ghost_overlay' ? `Image + Ghost Overlay (${Math.round(blendAlpha * 100)}%)` : 'Full JPEG Ghost Heatmap';
+    updateFullViewerStatus(`${modeName} · QF ${qf} · ${normName} · ${colormap.toUpperCase()} · ${blockSize}×${blockSize} blocks`);
+  }
+
+  function selectViewerQf(q) {
+    state.viewer.selectedQf = q;
+    const slider = $('#viewerQfSlider');
+    if (slider) slider.value = q;
+    const valText = $('#viewerQfVal');
+    if (valText) valText.textContent = q;
+    const badge = $('#viewerBadgeQf');
+    if (badge) badge.textContent = `QF ${q}`;
+
+    document.querySelectorAll('.lab-ghost-card').forEach(c => {
+      if (c.dataset.q === String(q)) c.classList.add('active');
+      else c.classList.remove('active');
+    });
+
+    renderFullViewer();
+  }
+
+  function setViewerMode(mode) {
+    state.viewer.mode = mode;
+    document.querySelectorAll('#viewerModeGroup .lab-vmode-btn').forEach(btn => {
+      if (btn.dataset.vmode === mode) btn.classList.add('active');
+      else btn.classList.remove('active');
+    });
+
+    const badgeMode = $('#viewerBadgeMode');
+    if (badgeMode) {
+      const titles = {
+        ghost: 'Ghost Heatmap',
+        ghost_overlay: 'Image + Ghost Overlay',
+        ela: 'ELA Map',
+        ela_overlay: 'Image + ELA Overlay',
+        original: 'Original Image'
+      };
+      badgeMode.textContent = titles[mode] || mode;
+    }
+
+    renderFullViewer();
+  }
+
+  function updateFullViewerStatus(text) {
+    const el = $('#fullViewerStatusText');
+    if (el) el.textContent = text;
+  }
+
+  function setupViewerHover() {
+    const canvas = $('#fullViewerCanvas');
+    const coordEl = $('#fullViewerCoordText');
+    if (!canvas || !coordEl) return;
+
+    canvas.onmousemove = e => {
+      const rect = canvas.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const x = Math.floor((e.clientX - rect.left) * scaleX);
+      const y = Math.floor((e.clientY - rect.top) * scaleY);
+      if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) return;
+
+      const q = state.viewer.selectedQf;
+      const qItem = state.ghost.rawQMaps ? state.ghost.rawQMaps.find(m => m.q === q) : null;
+      let extra = '';
+      if (qItem && state.viewer.mode.startsWith('ghost')) {
+        const bx = Math.floor((x - qItem.offX) / qItem.blockSize);
+        const by = Math.floor((y - qItem.offY) / qItem.blockSize);
+        if (bx >= 0 && bx < qItem.bCols && by >= 0 && by < qItem.bRows) {
+          const val = state.viewer.normMode === 'spatial' ? qItem.spatialGrid[by * qItem.bCols + bx] : qItem.normGrid[by * qItem.bCols + bx];
+          extra = ` · Block [${bx},${by}] Error: ${(val || 0).toFixed(3)}`;
+        }
+      }
+      coordEl.textContent = `X: ${x}, Y: ${y}${extra}`;
+    };
+
+    canvas.onmouseleave = () => {
+      coordEl.textContent = 'Hover image to inspect coordinates';
+    };
   }
 
   /* ---------------- SVG Charts ---------------- */
@@ -1453,9 +1725,69 @@
     $('#btnDownloadTampered').onclick = () => downloadBlob(state.composite.tamperedBlob, `tampered_final_QF${state.roi.finalQf}.jpg`);
 
     // Step 03 Event Listeners
-    $('#btnGhostPrev').onclick = runJpegGhost;
-    $('#btnElaPrev').onclick = runEla;
+    $('#btnGhostPrev').onclick = async () => {
+      await runForensicPreview();
+      setViewerMode('ghost');
+    };
+    $('#btnElaPrev').onclick = async () => {
+      await runForensicPreview();
+      setViewerMode('ela');
+    };
     $('#btnRunBothForensic').onclick = runForensicPreview;
+
+    // Full Viewer Mode Toolbar
+    document.querySelectorAll('#viewerModeGroup .lab-vmode-btn').forEach(btn => {
+      btn.onclick = () => setViewerMode(btn.dataset.vmode);
+    });
+
+    // Full Viewer Controls
+    const qfSlider = $('#viewerQfSlider');
+    if (qfSlider) {
+      qfSlider.oninput = e => {
+        const q = parseInt(e.target.value, 10);
+        selectViewerQf(q);
+      };
+    }
+
+    const blendSlider = $('#viewerBlendSlider');
+    if (blendSlider) {
+      blendSlider.oninput = e => {
+        const val = parseInt(e.target.value, 10);
+        state.viewer.blendAlpha = val / 100;
+        const bText = $('#viewerBlendVal');
+        if (bText) bText.textContent = `${val}%`;
+        renderFullViewer();
+      };
+    }
+
+    const normSel = $('#viewerNormSelect');
+    if (normSel) {
+      normSel.onchange = e => {
+        state.viewer.normMode = e.target.value;
+        renderFullViewer();
+      };
+    }
+
+    const colormapSel = $('#viewerColormapSelect');
+    if (colormapSel) {
+      colormapSel.onchange = e => {
+        state.viewer.colormap = e.target.value;
+        renderFullViewer();
+      };
+    }
+
+    const btnDlViewer = $('#btnDownloadFullViewer');
+    if (btnDlViewer) {
+      btnDlViewer.onclick = () => {
+        const cvs = $('#fullViewerCanvas');
+        if (!cvs) return;
+        cvs.toBlob(blob => {
+          downloadBlob(blob, `forensic_full_${state.viewer.mode}_QF${state.viewer.selectedQf}.png`);
+        });
+      };
+    }
+
+    setupViewerHover();
 
     $('#elaDownloadBtn').onclick = () => downloadBlob(state.ela.elaBlob, `ela_QF${state.ela.qf}.png`);
 
