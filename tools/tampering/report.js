@@ -361,7 +361,7 @@
     let cAlertBorder = [134, 239, 172]; // Green
     let cAlertBg = [240, 253, 244];
     let cAlertText = [22, 101, 52];
-    if (verdict.level === 'danger') {
+    if (verdict.level === 'danger' || verdict.level === 'bad') {
       cAlertBorder = [252, 165, 165];   // Red
       cAlertBg = [254, 242, 242];
       cAlertText = [153, 27, 27];
@@ -792,7 +792,8 @@
 
       doc.setFontSize(7);
       const isBad = c.status === 'ANOMALI' || c.status === 'DIVERGEN' || c.status === 'ELEVATED' || c.status.includes('TAMPERING');
-      doc.setTextColor(isBad ? [220, 38, 38] : [22, 101, 52]);
+      const statusColor = isBad ? [220, 38, 38] : [22, 101, 52];
+      doc.setTextColor(...statusColor);
       doc.text(c.status, cX + (scW / 2), cardY + 18, { align: 'center' });
     });
 
@@ -832,7 +833,7 @@
 
         // Badge pill
         let pillColor = [22, 101, 52];
-        if (r.level === 'danger') pillColor = [185, 28, 28];
+        if (r.level === 'danger' || r.level === 'bad') pillColor = [185, 28, 28];
         else if (r.level === 'warn') pillColor = [217, 119, 6];
 
         doc.setFillColor(...pillColor);
