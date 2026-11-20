@@ -17,6 +17,7 @@ tools/
 ├── tampering/               # 3. Tampering Analysis Lab & Splicing Detection
 │   ├── engine.js            # Mesin komputasi JPEG Ghost (Farid 2009) & ELA
 │   ├── tampering-lab.js     # Controller UI Web untuk laboratorium simulasi tampering
+│   ├── report.js            # Generator laporan resmi pemeriksaan forensik digital (PDF A4)
 │   └── index.js             # CLI analisis tampering JPEG Ghost & tabel DQT 8x8
 └── dataset/                 # 4. Dataset Acquisition & Signature Curation
     ├── build-signatures.js  # Ekstraksi dan kurasi signature dari direktori images/

@@ -1692,6 +1692,36 @@
 
     $('#elaDownloadBtn').onclick = () => downloadBlob(state.ela.elaBlob, `ela_QF${state.ela.qf}.png`);
 
+    // PDF Report Export Handlers
+    async function handlePdfReportDownload(e) {
+      if (e) e.preventDefault();
+      const btn = e && e.target;
+      const origText = btn ? btn.textContent : '';
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Generating PDF Report...';
+      }
+      try {
+        if (window.ForensicTamperingReport && window.ForensicTamperingReport.generatePdfReport) {
+          await window.ForensicTamperingReport.generatePdfReport(state, evaluateTamperingRules());
+        } else {
+          alert('Modul ForensicTamperingReport belum siap.');
+        }
+      } catch (err) {
+        console.error('PDF generation error:', err);
+        alert('Terjadi kesalahan saat membuat laporan PDF: ' + (err.message || err));
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = origText;
+        }
+      }
+    }
+
+    if ($('#btnDownloadTamperingPdf')) $('#btnDownloadTamperingPdf').onclick = handlePdfReportDownload;
+    if ($('#btnDownloadGhostPdf')) $('#btnDownloadGhostPdf').onclick = handlePdfReportDownload;
+    if ($('#btnForensicExportPdf')) $('#btnForensicExportPdf').onclick = handlePdfReportDownload;
+
     // Top action buttons
     $('#btnNewExperiment').onclick = resetExperiment;
     $('#btnExpZip').onclick = downloadExperimentZip;

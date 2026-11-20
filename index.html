@@ -507,6 +507,7 @@
             </p>
             <button class="btn" id="btnElaPrev" disabled style="margin-top:16px">JPEG ELA Preview</button>
             <button class="btn sec" id="btnRunBothForensic" style="margin-top:16px;margin-left:6px">Run All Previews</button>
+            <button class="btn sec" id="btnForensicExportPdf" style="margin-top:16px;margin-left:6px">Export PDF Report &darr;</button>
           </div>
         </div>
 
@@ -518,8 +519,9 @@
               <h3 style="font-size:18px;margin:4px 0 2px">Full-Image Forensic Heatmap &amp; Error Level Analysis</h3>
               <p class="small muted" style="margin:0">Visualisasi resolusi penuh seluruh gambar untuk deteksi jejak kompresi JPEG Ghost dan anomali ELA.</p>
             </div>
-            <div style="display:flex;gap:6px">
+            <div style="display:flex;gap:6px;align-items:center">
               <button class="lab-link-btn" id="btnDownloadFullViewer">Save View (PNG) &darr;</button>
+              <button class="btn sec" id="btnDownloadGhostPdf" style="font-size:12px;padding:5px 12px">Download Report (PDF) &darr;</button>
             </div>
           </div>
 
@@ -671,6 +673,11 @@
 
           <div style="font-size:13px;font-weight:700;color:#ffffff;margin-bottom:8px">Rule Evaluation &amp; Forensic Evidence Log:</div>
           <div id="ruleEvaluationList" style="display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:18px"></div>
+
+          <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+            <span class="small muted">Laporan komprehensif format standar forensik digital (A4) mencakup visual, kurva statistik, dan evaluasi aturan.</span>
+            <button class="btn primary" id="btnDownloadTamperingPdf" style="font-size:13px;padding:8px 18px">Download Forensic Report (PDF) &darr;</button>
+          </div>
         </div>
 
         <!-- Method Note -->
@@ -706,6 +713,7 @@
   <script src="huffman.js"></script>
   <script src="app.js"></script>
   <script src="tools/interpretation/rules.js"></script>
+  <script src="tools/tampering/report.js"></script>
   <script src="tools/tampering/tampering-lab.js"></script>
 </body>
 
