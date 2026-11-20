@@ -728,13 +728,19 @@
     doc.setTextColor(...cSlate900);
     doc.text('Exhibit 3B: Parameter & Metrik ELA', elaTblX + 4, elaBoxY + 6);
 
+    const maeVal = parseFloat(state.ela && state.ela.mae) || 0;
+    const clipVal = parseFloat(state.ela && state.ela.clippingPct) || 0;
+    const ksList = (state.ghost && state.ghost.curves && state.ghost.curves.ks) || [];
+    const maxKsVal = ksList.length ? Math.max(...ksList) : 0;
+    const localMinimaList = (state.ghost && state.ghost.localMinima) || [];
+
     const elaRows = [
       ['Quality Factor Acuan:', `QF ${state.ela.qf || 75}`],
       ['Penguatan Residu (Gain):', `${state.ela.gain || 10}×`],
-      ['Mean Absolute Error (MAE):', `${(state.ela.mae || 0).toFixed(2)}`],
-      ['Tingkat Saturasi (Clipping):', `${(state.ela.clippingPct || 0).toFixed(2)}%`],
+      ['Mean Absolute Error (MAE):', `${maeVal.toFixed(2)}`],
+      ['Tingkat Saturasi (Clipping):', `${clipVal.toFixed(2)}%`],
       ['Ambang Batas MAE Normal:', '< 3.00 (Tinggi jika ≥ 3.00)'],
-      ['Indikasi Sambungan Objek:', state.ela.mae >= 3.0 ? 'Terdeteksi Lonjakan Residu' : 'Residu Normal Homogen']
+      ['Indikasi Sambungan Objek:', maeVal >= 3.0 ? 'Terdeteksi Lonjakan Residu' : 'Residu Normal Homogen']
     ];
 
     let rY = elaBoxY + 12;
@@ -762,9 +768,9 @@
     const scW = contentW / 4;
 
     const cards = [
-      { label: 'Deteksi Minima Ghost', val: state.ghost.localMinima.length ? `QF ${state.ghost.localMinima.join(', ')}` : 'Nihil', status: state.ghost.localMinima.length ? 'ANOMALI' : 'NORMAL' },
-      { label: 'Uji Divergensi K-S', val: `D_KS = ${(Math.max(...(state.ghost.curves.ks || [0]))).toFixed(2)}`, status: Math.max(...(state.ghost.curves.ks || [0])) >= 0.40 ? 'DIVERGEN' : 'HOMOGEN' },
-      { label: 'Residu ELA (MAE)', val: `${(state.ela.mae || 0).toFixed(2)}`, status: state.ela.mae >= 3.0 ? 'ELEVATED' : 'NORMAL' },
+      { label: 'Deteksi Minima Ghost', val: localMinimaList.length ? `QF ${localMinimaList.join(', ')}` : 'Nihil', status: localMinimaList.length ? 'ANOMALI' : 'NORMAL' },
+      { label: 'Uji Divergensi K-S', val: `D_KS = ${maxKsVal.toFixed(2)}`, status: maxKsVal >= 0.40 ? 'DIVERGEN' : 'HOMOGEN' },
+      { label: 'Residu ELA (MAE)', val: `${maeVal.toFixed(2)}`, status: maeVal >= 3.0 ? 'ELEVATED' : 'NORMAL' },
       { label: 'Skor Probabilitas', val: `${verdict.score || 0}%`, status: verdict.badge || 'VERDICT' }
     ];
 
