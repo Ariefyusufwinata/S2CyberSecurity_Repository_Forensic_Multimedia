@@ -510,24 +510,6 @@
           </div>
         </div>
 
-        <!-- Rule-Based Forensic Interpretation Card -->
-        <div id="ruleInterpretationSection" style="display:none;margin-top:24px;border-top:1px solid var(--line);padding-top:18px">
-          <div style="font-size:11px;font-weight:800;letter-spacing:1px;color:var(--accent)">AUTOMATED FORENSIC EXPERT SYSTEM / RULE-BASED VERDICT</div>
-          <h3 style="font-size:18px;margin:4px 0 10px">Forensic Tampering Interpretation</h3>
-
-          <div id="ruleVerdictAlert" class="alert ok" style="margin:10px 0 16px">
-            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-              <span id="ruleVerdictBadge" class="badge ok" style="font-size:11px;padding:3px 10px">CONSISTENT</span>
-              <span class="small mono" id="ruleRiskScore">Tampering Probability: 0%</span>
-            </div>
-            <div id="ruleVerdictTitle" style="font-size:15.5px;font-weight:800;margin:8px 0 4px">CONSISTENT COMPRESSION PROFILE</div>
-            <small id="ruleVerdictRec" style="line-height:1.6;font-size:13px;display:block"></small>
-          </div>
-
-          <div style="font-size:13px;font-weight:700;color:#ffffff;margin-bottom:8px">Rule Evaluation &amp; Forensic Evidence Log:</div>
-          <div id="ruleEvaluationList" style="display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:18px"></div>
-        </div>
-
         <!-- JPEG Ghost & Full-Image Forensic Heatmap Result Section -->
         <div id="ghostResultSection" style="display:none;margin-top:24px;border-top:1px solid var(--line);padding-top:18px">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px">
@@ -546,11 +528,11 @@
             <!-- Mode Selector Toolbar -->
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;border-bottom:1px solid var(--line);padding-bottom:12px">
               <div style="display:flex;flex-wrap:wrap;gap:6px" id="viewerModeGroup">
-                <button type="button" class="lab-vmode-btn active" data-vmode="ghost" id="btnModeGhost">👻 Ghost Heatmap</button>
-                <button type="button" class="lab-vmode-btn" data-vmode="ghost_overlay" id="btnModeGhostOverlay">🔀 Image + Ghost Overlay</button>
-                <button type="button" class="lab-vmode-btn" data-vmode="ela" id="btnModeEla">⚡ ELA Map</button>
-                <button type="button" class="lab-vmode-btn" data-vmode="ela_overlay" id="btnModeElaOverlay">🔀 Image + ELA Overlay</button>
-                <button type="button" class="lab-vmode-btn" data-vmode="original" id="btnModeOriginal">🖼 Original Image</button>
+                <button type="button" class="lab-vmode-btn active" data-vmode="ghost" id="btnModeGhost">Ghost Heatmap</button>
+                <button type="button" class="lab-vmode-btn" data-vmode="ghost_overlay" id="btnModeGhostOverlay">Image + Ghost Overlay</button>
+                <button type="button" class="lab-vmode-btn" data-vmode="ela" id="btnModeEla">ELA Map</button>
+                <button type="button" class="lab-vmode-btn" data-vmode="ela_overlay" id="btnModeElaOverlay">Image + ELA Overlay</button>
+                <button type="button" class="lab-vmode-btn" data-vmode="original" id="btnModeOriginal">Original Image</button>
               </div>
               <div style="display:flex;align-items:center;gap:8px">
                 <span class="badge navy" id="viewerBadgeQf">QF 65</span>
@@ -673,6 +655,24 @@
           </div>
         </div>
 
+        <!-- Rule-Based Forensic Interpretation Card (At Very Bottom of Forensic Results) -->
+        <div id="ruleInterpretationSection" style="display:none;margin-top:24px;border-top:1px solid var(--line);padding-top:18px">
+          <div style="font-size:11px;font-weight:800;letter-spacing:1px;color:var(--accent)">AUTOMATED FORENSIC EXPERT SYSTEM / RULE-BASED VERDICT</div>
+          <h3 style="font-size:18px;margin:4px 0 10px">Forensic Tampering Interpretation</h3>
+
+          <div id="ruleVerdictAlert" class="alert ok" style="margin:10px 0 16px">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+              <span id="ruleVerdictBadge" class="badge ok" style="font-size:11px;padding:3px 10px">CONSISTENT</span>
+              <span class="small mono" id="ruleRiskScore">Tampering Probability: 0%</span>
+            </div>
+            <div id="ruleVerdictTitle" style="font-size:15.5px;font-weight:800;margin:8px 0 4px">CONSISTENT COMPRESSION PROFILE</div>
+            <small id="ruleVerdictRec" style="line-height:1.6;font-size:13px;display:block"></small>
+          </div>
+
+          <div style="font-size:13px;font-weight:700;color:#ffffff;margin-bottom:8px">Rule Evaluation &amp; Forensic Evidence Log:</div>
+          <div id="ruleEvaluationList" style="display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:18px"></div>
+        </div>
+
         <!-- Method Note -->
         <div class="lab-method-note">
           <b>Method note:</b> JPEG Ghost mengikuti Farid (2009), persamaan (2)&ndash;(4), dengan blok non-overlapping dan offset manual; ELA mengikuti Lecture 6 slide 33&ndash;34. Tidak ada klasifikasi otomatis asli/palsu. Data eksperimen disimpan terpisah dari database signature referensi kamera.
@@ -705,6 +705,7 @@
   <script src="dataset.js"></script>
   <script src="huffman.js"></script>
   <script src="app.js"></script>
+  <script src="tools/interpretation/rules.js"></script>
   <script src="tools/tampering/tampering-lab.js"></script>
 </body>
 
